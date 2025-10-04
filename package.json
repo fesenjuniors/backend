@@ -21,9 +21,17 @@
   },
   "homepage": "https://github.com/fesenjuniors/backend#readme",
   "dependencies": {
+    "@google-cloud/vision": "^5.3.3",
+    "@zxing/library": "^0.21.3",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "jsqr": "^1.4.0",
+    "pngjs": "^7.0.0",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.34.4",
     "firebase-admin": "^12.0.0",
+    "ws": "^8.18.3",
+    "zxing-wasm": "^2.2.2"
     "qrcode": "^1.5.3",
     "ws": "^8.18.3"
   },
@@ -31,6 +39,8 @@
     "@types/dotenv": "^8.2.3",
     "@types/express": "^5.0.3",
     "@types/node": "^24.6.2",
+    "@types/pngjs": "^6.0.5",
+    "@types/qrcode": "^1.5.5",
     "@types/qrcode": "^1.5.5",
     "@types/ws": "^8.18.1",
     "nodemon": "^3.1.10",

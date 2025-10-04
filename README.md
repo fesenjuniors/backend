@@ -24,6 +24,10 @@ npm start
 - `GET /health` - Health check endpoint
   - Returns: `{ "status": "ok" }`
 
+- `POST /scan-qr` - Scan QR code from base64 image
+  - Request body: `{ "image": "base64_string" }`
+  - Returns: `{ "success": true, "qrCode": "qr_data" }` or `{ "success": false, "message": "..." }`
+
 ### WebSocket
 - `ws://localhost:8080/ws` - Real-time game communication
   - Handles player connections, game events, and broadcasts
@@ -76,6 +80,34 @@ socket.addEventListener('open', () => {
 
 socket.addEventListener('message', (event) => {
     console.log('Received:', event.data);
+});
+```
+
+### QR Code Scanning
+
+```javascript
+// Capture image from camera
+const video = document.querySelector('video');
+const canvas = document.createElement('canvas');
+canvas.width = video.videoWidth;
+canvas.height = video.videoHeight;
+canvas.getContext('2d').drawImage(video, 0, 0);
+
+// Convert to base64
+const base64Image = canvas.toDataURL('image/jpeg');
+
+// Send to backend for scanning
+fetch('http://localhost:8080/scan-qr', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: base64Image })
+})
+.then(res => res.json())
+.then(data => {
+    if (data.success) {
+        console.log('QR Code found:', data.qrCode);
+        // Handle player ID from QR code
+    }
 });
 ```
 
