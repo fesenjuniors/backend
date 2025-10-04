@@ -46,6 +46,11 @@ coverage/
 .nyc_output/
 test-client.js
 test-client.html
+test-qr-cli.ts
+generate-test-qr.ts
+test-qr-*.png
+src/test-pictures/
+src/utils/test-qr.ts
 
 # Misc
 *.tgz
@@ -53,3 +58,12 @@ test-client.html
 .cache/
 temp/
 tmp/
+
+# ZXing test files
+test-zxing.ts
+debug-images/
+
+# Google Cloud credentials
+google-credentials.json
+*-credentials.json
+*.json.key
