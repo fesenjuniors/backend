@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "dev": "nodemon --watch src --ext ts --exec ts-node src/server/server.ts",
-    "start": "node dist/server/server.js"
+    "start": "node dist/server/server.js",
+    "test:websocket": "node test-websocket.js"
   },
   "repository": {
     "type": "git",
@@ -28,6 +29,7 @@
     "pngjs": "^7.0.0",
     "qrcode": "^1.5.4",
     "sharp": "^0.34.4",
+    "firebase-admin": "^12.0.0",
     "ws": "^8.18.3",
     "zxing-wasm": "^2.2.2"
   },
