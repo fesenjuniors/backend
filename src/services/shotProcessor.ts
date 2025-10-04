@@ -169,6 +169,19 @@ export async function decodeAndScanQrWithDebug(imageBase64: string): Promise<str
   
   // STUB IMPLEMENTATION
   // TODO: Implement actual QR decoding logic
+  
+  // this for testing purposes only
+  if (imageBase64.includes('_HIT_')) {
+    console.log("FORCED HIT for testing");
+    const hitMarkerIndex = imageBase64.indexOf('_HIT_');
+    const targetId = imageBase64.substring(hitMarkerIndex + 5);
+    console.log("Extracted target ID:", targetId);
+    return targetId;
+  }
+  if (imageBase64.includes('_MISS')) {
+    console.log("FORCED MISS for testing");
+    return null;
+  }
 
   if (Math.random() > 0.5) {
     return `player-${Math.floor(Math.random() * 10) + 1}`;
