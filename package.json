@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "dev": "nodemon --watch src --ext ts --exec ts-node src/server/server.ts",
-    "start": "node dist/server/server.js"
+    "start": "node dist/server/server.js",
+    "test:websocket": "node test-websocket.js"
   },
   "repository": {
     "type": "git",

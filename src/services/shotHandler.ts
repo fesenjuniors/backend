@@ -211,3 +211,23 @@ async function broadcastLeaderboardUpdate(
 function generateShotId(): string {
   return `shot_${randomBytes(8).toString("hex")}`;
 }
+
+/**
+ * Broadcast result (Payman's function)
+ * STUB: TO BE IMPLEMENTED
+ * Takes matchId, shooterId, targetId, broadcasts the result
+ */
+export async function broadcastResult(
+  matchId: string,
+  shooterId: string,
+  targetId: string | null,
+  wsManager: WebSocketManager
+): Promise<void> {
+  console.log(`broadcastResult called: match ${matchId}, shooter ${shooterId}, target ${targetId || 'MISS'}`);
+  
+  // STUB IMPLEMENTATION
+  // TODO: Implement actual broadcasting logic
+  // For now, delegate to handleShotResult
+  
+  await handleShotResult(matchId, shooterId, targetId, wsManager);
+}

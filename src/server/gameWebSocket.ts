@@ -2,7 +2,8 @@ import type { WebSocket } from "ws";
 import type { WebSocketManager } from "./websocket";
 import { matchManager } from "../services/matchManager";
 import { handleShotResult } from "../services/shotHandler";
-import { processShotImage } from "../services/shotProcessor";
+import { processShotImage, decodeAndScanQrWithDebug } from "../services/shotProcessor";
+import { broadcastResult } from "../services/shotHandler";
 import type {
   GameWebSocketEvent,
   PlayerConnectPayload,
@@ -198,34 +199,25 @@ async function handleShotAttempt(
   try {
     console.log(`Shot attempt received from shooter ${shooterId}`);
 
-    // 1. Call shot processor (implemented by another hackathonee)
-    // This returns targetId or null
-    const result = await processShotImage({
-      shooterId,
-      matchId,
-      imageBase64: imageData,
-    });
+    // 1. Call decodeAndScanQrWithDebug to get targetId
+    const targetId = await decodeAndScanQrWithDebug(imageData);
 
-    // 2. Handle the result (save to DB and broadcast)
-    await handleShotResult(matchId, shooterId, result.targetId, wsManager);
+    // 2. Pass to broadcastResult
+    await broadcastResult(matchId, shooterId, targetId, wsManager);
   } catch (error) {
-    // If shot processor is not implemented yet, send helpful error
-    if (
-      error instanceof Error &&
-      error.message.includes("not yet implemented")
-    ) {
-      ws.send(
-        JSON.stringify({
-          type: "error",
-          data: {
-            message:
-              "Shot processing not yet implemented. Waiting for another hackathonee to complete shotProcessor.ts",
-          },
-        })
-      );
-    } else {
-      throw error;
-    }
+    // If processing fails, send helpful error
+    console.error("Error in shot attempt handler:", error);
+    ws.send(
+      JSON.stringify({
+        type: "error",
+        data: {
+          message:
+            error instanceof Error
+              ? error.message
+              : "Shot processing failed",
+        },
+      })
+    );
   }
 }
 

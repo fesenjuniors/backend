@@ -158,3 +158,21 @@ async function validateShotQualityWithAI(
   */
   return true;
 }
+
+/**
+ * Decode and scan QR with debug
+ * STUB: TO BE IMPLEMENTED
+ * Takes base64 image, returns player ID who got shot or null
+ */
+export async function decodeAndScanQrWithDebug(imageBase64: string): Promise<string | null> {
+  console.log("decodeAndScanQrWithDebug called with image size:", imageBase64.length);
+  
+  // STUB IMPLEMENTATION
+  // TODO: Implement actual QR decoding logic
+
+  if (Math.random() > 0.5) {
+    return `player-${Math.floor(Math.random() * 10) + 1}`;
+  }
+  
+  return null;
+}
