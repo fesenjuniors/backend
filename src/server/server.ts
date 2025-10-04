@@ -5,16 +5,23 @@ import { initializeFirebase } from "../config/firebase";
 import { registerRoutes } from "../routes/serverRoute";
 import { createWebSocketManager } from "./websocket";
 import { setupGameWebSocketHandlers } from "./gameWebSocket";
+import { errorHandler, validateRequest } from "../middleware/errorHandler";
 
 // Initialize Firebase
 initializeFirebase();
 
 const app = express();
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Middleware
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(validateRequest);
 
+// Routes
 registerRoutes(app);
+
+// Global error handler (must be last)
+app.use(errorHandler);
 
 const server = http.createServer(app);
 

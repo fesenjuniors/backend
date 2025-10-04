@@ -1,15 +1,18 @@
 // Match and Player Type Definitions
 
-export type MatchState = "waiting" | "active" | "ended";
+export type MatchState = "waiting" | "active" | "paused" | "ended";
 export type PlayerState = "connected" | "disconnected" | "eliminated";
+export type PlayerRole = "player" | "admin";
 
 export interface Player {
   id: string;
   name: string;
   qrCode: string;
+  qrCodeBase64: string; // Base64 encoded QR code for frontend
   score: number;
   shots: number;
   state: PlayerState;
+  role: PlayerRole;
   joinedAt: Date;
 }
 
@@ -17,8 +20,10 @@ export interface Match {
   id: string;
   state: MatchState;
   players: Map<string, Player>;
+  adminId: string; // ID of the match admin
   createdAt: Date;
   startedAt?: Date;
+  pausedAt?: Date;
   endedAt?: Date;
 }
 
@@ -46,6 +51,49 @@ export interface ShotAttemptPayload {
   matchId: string;
   shooterId: string;
   imageData: string; // base64 encoded image
+}
+
+// Match admin actions
+export interface MatchAdminAction {
+  matchId: string;
+  adminId: string;
+  action: "start" | "pause" | "resume" | "end";
+}
+
+// Player join request
+export interface PlayerJoinRequest {
+  matchId: string;
+  playerName: string;
+}
+
+// Player join response
+export interface PlayerJoinResponse {
+  playerId: string;
+  playerName: string;
+  qrCode: string; // JSON string
+  qrCodeBase64: string; // Base64 encoded QR image
+  matchId: string;
+  role: PlayerRole;
+}
+
+// QR code data structure
+export interface QrCodeData {
+  matchId: string;
+  playerId: string;
+  timestamp: string;
+}
+
+// Match admin events
+export interface MatchPausedPayload {
+  matchId: string;
+  pausedAt: string;
+  adminId: string;
+}
+
+export interface MatchResumedPayload {
+  matchId: string;
+  resumedAt: string;
+  adminId: string;
 }
 
 export interface MatchStatePayload {
@@ -107,13 +155,16 @@ export interface MatchEndedPayload {
 export type GameWebSocketEvent =
   | { type: "player:connect"; data: PlayerConnectPayload }
   | { type: "player:disconnect"; data: PlayerDisconnectPayload }
-  | { type: "shot:attempt"; data: ShotAttemptPayload }; // TO BE IMPLEMENTED
+  | { type: "shot:attempt"; data: ShotAttemptPayload }
+  | { type: "admin:action"; data: MatchAdminAction };
 
 export type GameWebSocketBroadcast =
   | { type: "match:state"; data: MatchStatePayload }
   | { type: "player:joined"; data: PlayerJoinedPayload }
   | { type: "player:left"; data: PlayerLeftPayload }
   | { type: "leaderboard:update"; data: LeaderboardUpdatePayload }
-  | { type: "shot:result"; data: ShotResultPayload } // TO BE IMPLEMENTED
+  | { type: "shot:result"; data: ShotResultPayload }
   | { type: "match:started"; data: MatchStartedPayload }
+  | { type: "match:paused"; data: MatchPausedPayload }
+  | { type: "match:resumed"; data: MatchResumedPayload }
   | { type: "match:ended"; data: MatchEndedPayload };

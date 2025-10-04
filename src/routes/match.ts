@@ -2,29 +2,76 @@ import type { Request, Response } from "express";
 import { Router } from "express";
 import { matchManager } from "../services/matchManager";
 import { websocketManager } from "../server/server";
-import type {
-  MatchStartedPayload,
-  MatchEndedPayload,
-  MatchStatePayload,
-} from "../types/game";
+import {
+  asyncHandler,
+  validateString,
+  safeJsonResponse,
+} from "../middleware/errorHandler";
+import type { MatchStartedPayload, MatchEndedPayload } from "../types/game";
 
 const router = Router();
 
 /**
- * Create a new match
+ * Create a new match with admin
  * POST /api/match/create
  */
-router.post("/api/match/create", (_req: Request, res: Response) => {
+router.post("/api/match/create", (req: Request, res: Response) => {
   try {
-    const match = matchManager.createMatch();
+    // Validate request body exists
+    if (!req.body || typeof req.body !== "object") {
+      return res.status(400).json({
+        error: "Invalid request body",
+        details: "Request body must be a valid JSON object",
+      });
+    }
+
+    const { adminName } = req.body;
+
+    // Validate adminName
+    if (!adminName) {
+      return res.status(400).json({
+        error: "adminName is required",
+        details: "Please provide an admin name",
+      });
+    }
+
+    if (typeof adminName !== "string") {
+      return res.status(400).json({
+        error: "adminName must be a string",
+        details: "Admin name must be a text value",
+      });
+    }
+
+    if (adminName.trim().length === 0) {
+      return res.status(400).json({
+        error: "adminName cannot be empty",
+        details: "Please provide a valid admin name",
+      });
+    }
+
+    if (adminName.length > 50) {
+      return res.status(400).json({
+        error: "adminName too long",
+        details: "Admin name must be 50 characters or less",
+      });
+    }
+
+    const match = matchManager.createMatch(adminName.trim());
 
     res.status(201).json({
       matchId: match.id,
+      adminId: match.adminId,
+      adminName: match.players.get(match.adminId)?.name || adminName.trim(),
       createdAt: match.createdAt.toISOString(),
     });
   } catch (error) {
     console.error("Error creating match:", error);
-    res.status(500).json({ error: "Failed to create match" });
+
+    // Don't expose internal errors to client
+    res.status(500).json({
+      error: "Failed to create match",
+      details: "An internal server error occurred. Please try again.",
+    });
   }
 });
 
@@ -73,10 +120,18 @@ router.post("/api/match/:matchId/start", (req: Request, res: Response) => {
     return;
   }
 
-  const success = matchManager.startMatch(matchId);
+  const { adminId } = req.body;
+
+  if (!adminId) {
+    res.status(400).json({ error: "adminId is required" });
+    return;
+  }
+
+  const success = matchManager.startMatch(matchId, adminId);
   if (!success) {
     res.status(400).json({
-      error: "Failed to start match. Check match state and player count.",
+      error:
+        "Failed to start match. Check admin permissions, match state and player count.",
     });
     return;
   }
@@ -114,11 +169,18 @@ router.post("/api/match/:matchId/end", (req: Request, res: Response) => {
     return;
   }
 
-  const success = matchManager.endMatch(matchId);
+  const { adminId } = req.body;
+
+  if (!adminId) {
+    res.status(400).json({ error: "adminId is required" });
+    return;
+  }
+
+  const success = matchManager.endMatch(matchId, adminId);
   if (!success) {
-    res
-      .status(400)
-      .json({ error: "Failed to end match. Match must be active." });
+    res.status(400).json({
+      error: "Failed to end match. Check admin permissions and match state.",
+    });
     return;
   }
 
@@ -171,12 +233,86 @@ router.get("/api/match/:matchId/leaderboard", (req: Request, res: Response) => {
  * Join a match
  * POST /api/match/:matchId/join
  */
-router.post("/api/match/:matchId/join", (req: Request, res: Response) => {
-  const matchId = req.params.matchId as string;
-  const { playerName } = req.body;
+router.post(
+  "/api/match/:matchId/join",
+  asyncHandler(async (req: Request, res: Response) => {
+    const matchId = req.params.matchId as string;
+    const { playerName } = req.body;
 
-  if (!playerName || typeof playerName !== "string") {
-    res.status(400).json({ error: "playerName is required" });
+    // Validate matchId
+    if (!matchId || typeof matchId !== "string") {
+      return safeJsonResponse(res, 400, {
+        error: "Invalid match ID",
+        details: "Match ID is required and must be a string",
+      });
+    }
+
+    // Validate playerName
+    const validation = validateString(playerName, "playerName", {
+      required: true,
+      maxLength: 50,
+      minLength: 1,
+    });
+
+    if (!validation.isValid) {
+      return safeJsonResponse(res, 400, {
+        error: validation.error,
+        details: "Please provide a valid player name",
+      });
+    }
+
+    const match = matchManager.getMatch(matchId);
+    if (!match) {
+      return safeJsonResponse(res, 404, {
+        error: "Match not found",
+        details: `No match found with ID: ${matchId}`,
+      });
+    }
+
+    const player = await matchManager.addPlayer(matchId, playerName.trim());
+    if (!player) {
+      // Check if it's a duplicate name error
+      const match = matchManager.getMatch(matchId);
+      if (match) {
+        const existingPlayer = Array.from(match.players.values()).find(
+          (p) => p.name.toLowerCase() === playerName.trim().toLowerCase()
+        );
+
+        if (existingPlayer) {
+          return safeJsonResponse(res, 409, {
+            error: `Player name "${playerName}" already exists in match ${matchId}`,
+            details: "Please choose a different name",
+          });
+        }
+      }
+
+      return safeJsonResponse(res, 400, {
+        error: "Failed to join match",
+        details: "Match may have already started or is full",
+      });
+    }
+
+    safeJsonResponse(res, 201, {
+      playerId: player.id,
+      playerName: player.name,
+      qrCode: player.qrCode,
+      qrCodeBase64: player.qrCodeBase64,
+      matchId,
+      role: player.role,
+    });
+  })
+);
+
+/**
+ * Pause a match (admin only)
+ * POST /api/match/:matchId/pause
+ */
+router.post("/api/match/:matchId/pause", (req: Request, res: Response) => {
+  const matchId = req.params.matchId as string;
+  const { adminId } = req.body;
+
+  if (!adminId) {
+    res.status(400).json({ error: "adminId is required" });
     return;
   }
 
@@ -186,20 +322,102 @@ router.post("/api/match/:matchId/join", (req: Request, res: Response) => {
     return;
   }
 
-  const player = matchManager.addPlayer(matchId, playerName);
-  if (!player) {
-    res
-      .status(400)
-      .json({ error: "Failed to join match. Match may have already started." });
+  const success = matchManager.pauseMatch(matchId, adminId);
+  if (!success) {
+    res.status(400).json({
+      error: "Failed to pause match. Check admin permissions and match state.",
+    });
     return;
   }
 
-  res.status(201).json({
-    playerId: player.id,
-    playerName: player.name,
-    qrCode: player.qrCode,
+  // Broadcast match paused event
+  const payload = {
     matchId,
+    pausedAt: match.pausedAt!.toISOString(),
+    adminId,
+  };
+
+  websocketManager.broadcast(
+    JSON.stringify({
+      type: "match:paused",
+      data: payload,
+    })
+  );
+
+  res.status(200).json({
+    matchId,
+    state: match.state,
+    pausedAt: match.pausedAt?.toISOString(),
   });
 });
+
+/**
+ * Resume a match (admin only)
+ * POST /api/match/:matchId/resume
+ */
+router.post("/api/match/:matchId/resume", (req: Request, res: Response) => {
+  const matchId = req.params.matchId as string;
+  const { adminId } = req.body;
+
+  if (!adminId) {
+    res.status(400).json({ error: "adminId is required" });
+    return;
+  }
+
+  const match = matchManager.getMatch(matchId);
+  if (!match) {
+    res.status(404).json({ error: "Match not found" });
+    return;
+  }
+
+  const success = matchManager.resumeMatch(matchId, adminId);
+  if (!success) {
+    res.status(400).json({
+      error: "Failed to resume match. Check admin permissions and match state.",
+    });
+    return;
+  }
+
+  // Broadcast match resumed event
+  const payload = {
+    matchId,
+    resumedAt: new Date().toISOString(),
+    adminId,
+  };
+
+  websocketManager.broadcast(
+    JSON.stringify({
+      type: "match:resumed",
+      data: payload,
+    })
+  );
+
+  res.status(200).json({
+    matchId,
+    state: match.state,
+  });
+});
+
+/**
+ * Get all QR codes for a match (for reprinting)
+ * GET /api/match/:matchId/qrcodes
+ */
+router.get(
+  "/api/match/:matchId/players",
+  async (req: Request, res: Response) => {
+    const matchId = req.params.matchId as string;
+
+    try {
+      const qrCodes = await matchManager.getAllQrCodes(matchId);
+      res.status(200).json({
+        matchId,
+        qrCodes,
+      });
+    } catch (error) {
+      console.error("Error fetching QR codes:", error);
+      res.status(500).json({ error: "Failed to fetch QR codes" });
+    }
+  }
+);
 
 export default router;
