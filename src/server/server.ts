@@ -20,8 +20,16 @@ app.use((req, res, next) => {
   const allowedOrigins = [
     "http://localhost:5175",
     "https://localhost:5175", 
+    "http://localhost:8175",
+    "https://localhost:8175",
     "http://127.0.0.1:5175",
     "https://127.0.0.1:5175",
+    "https://127.0.0.1:8175",
+    "http://127.0.0.1:8175",
+
+
+
+
     "*" // Allow all origins in development
   ];
   

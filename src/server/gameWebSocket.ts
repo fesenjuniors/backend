@@ -245,12 +245,45 @@ async function handleShotAttempt(
   try {
     console.log(`Shot attempt received from shooter ${shooterId}`);
 
-    // 1. Call scanQRFromBase64 to get targetId
-    const targetId = await scanQRFromBase64(imageData);
+    // 1. Call scanQRFromBase64 to get QR code content
+    const qrContent = await scanQRFromBase64(imageData);
+    
+    let targetId: string | null = null;
+    
+    // 2. Parse the QR content if found
+    if (qrContent) {
+      try {
+        // Parse the JSON to extract playerId
+        const qrData = JSON.parse(qrContent);
+        console.log(`📄 Parsed QR data:`, qrData);
+        
+        // Extract the playerId from the QR data
+        if (qrData && qrData.playerId) {
+          targetId = qrData.playerId;
+          console.log(`✅ QR parsed successfully. Target player: ${targetId}`);
+          
+          // Optional: Verify the matchId matches
+          if (qrData.matchId && qrData.matchId !== matchId) {
+            console.warn(`⚠️ QR code is from different match: ${qrData.matchId} vs ${matchId}`);
+            // You might want to treat this as a miss
+            // targetId = null;
+          }
+        } else {
+          console.log(`❌ QR content doesn't contain playerId. QR data:`, qrData);
+        }
+      } catch (parseError) {
+        console.log(`❌ Failed to parse QR content as JSON: ${qrContent}`);
+        // If it's not JSON, maybe it's just the player ID directly
+        // This maintains backward compatibility if needed
+        targetId = qrContent;
+      }
+    } else {
+      console.log(`❌ No QR code detected - MISS`);
+    }
 
-    console.log(`Shot processed. Target ID: ${targetId}`);
+    console.log(`Shot processed. Target ID: ${targetId || "MISS"}`);
 
-    // 2. Pass to broadcastResult
+    // 3. Pass to broadcastResult
     await broadcastResult(matchId, shooterId, targetId, wsManager);
   } catch (error) {
     // If processing fails, send helpful error
