@@ -2,7 +2,10 @@ import type { WebSocket } from "ws";
 import type { WebSocketManager } from "./websocket";
 import { matchManager } from "../services/matchManager";
 import { handleShotResult } from "../services/shotHandler";
-import { processShotImage, decodeAndScanQrWithDebug } from "../services/shotProcessor";
+import {
+  processShotImage,
+  decodeAndScanQrWithDebug,
+} from "../services/shotProcessor";
 import { broadcastResult } from "../services/shotHandler";
 import type {
   GameWebSocketEvent,
@@ -23,7 +26,7 @@ import { scanQRFromBase64 } from "../utils/qr-base64-scanner";
 export const setupGameWebSocketHandlers = (
   wsManager: WebSocketManager
 ): void => {
-  wsManager.on("message", (clientId, data, ws) => {
+  wsManager.on("message", async (clientId, data, ws) => {
     try {
       // Validate WebSocket connection is still open
       if (ws.readyState !== ws.OPEN) {
@@ -61,11 +64,11 @@ export const setupGameWebSocketHandlers = (
       // Route message to appropriate handler
       switch (message.type) {
         case "player:connect":
-          handlePlayerConnect(message.data, ws, wsManager);
+          await handlePlayerConnect(message.data, ws, wsManager);
           break;
 
         case "player:disconnect":
-          handlePlayerDisconnect(message.data, wsManager);
+          await handlePlayerDisconnect(message.data, wsManager);
           break;
 
         case "shot:attempt":
@@ -121,28 +124,48 @@ function sendError(ws: WebSocket, message: string): void {
 /**
  * Handle player:connect event
  */
-function handlePlayerConnect(
+async function handlePlayerConnect(
   payload: PlayerConnectPayload,
   ws: WebSocket,
   wsManager: WebSocketManager
-): void {
+): Promise<void> {
   const { matchId, playerId } = payload;
 
   console.log(`Player ${playerId} connecting to match ${matchId}`);
 
-  // Verify match and player exist
-  const match = matchManager.getMatch(matchId);
+  // Verify match exists (try to load from database if not in memory)
+  let match = matchManager.getMatch(matchId);
   if (!match) {
-    ws.send(
-      JSON.stringify({
-        type: "error",
-        data: { message: "Match not found" },
+    // Try to load match from database
+    matchManager
+      .loadMatchFromDatabase(matchId)
+      .then(async (loadedMatch) => {
+        if (!loadedMatch) {
+          ws.send(
+            JSON.stringify({
+              type: "error",
+              data: { message: "Match not found" },
+            })
+          );
+          return;
+        }
+
+        // Retry connection with loaded match
+        await handlePlayerConnect(payload, ws, wsManager);
       })
-    );
+      .catch((error) => {
+        console.error("Error loading match from database:", error);
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            data: { message: "Failed to load match" },
+          })
+        );
+      });
     return;
   }
 
-  const player = matchManager.getPlayer(matchId, playerId);
+  const player = await matchManager.getPlayer(matchId, playerId);
   if (!player) {
     ws.send(
       JSON.stringify({
@@ -154,24 +177,32 @@ function handlePlayerConnect(
   }
 
   // Update player state to connected
-  matchManager.updatePlayerState(matchId, playerId, "connected");
+  await matchManager.updatePlayerState(matchId, playerId, "connected");
 
   // Send current match state to the connecting player
   const matchStatePayload: MatchStatePayload = {
     matchId,
     state: match.state,
-    players: Array.from(match.players.values()).map((p) => ({
-      id: p.id,
-      name: p.name,
-      score: p.score,
-      state: p.state,
-    })),
   };
 
   ws.send(
     JSON.stringify({
       type: "match:state",
       data: matchStatePayload,
+    })
+  );
+
+  // Send player's current data (inventory, scores, etc.)
+  ws.send(
+    JSON.stringify({
+      type: "player:data",
+      data: {
+        matchId,
+        playerId,
+        inventory: player.inventory,
+        scoreHistory: player.scoreHistory,
+        score: player.score,
+      },
     })
   );
 
@@ -198,16 +229,16 @@ function handlePlayerConnect(
 /**
  * Handle player:disconnect event
  */
-function handlePlayerDisconnect(
+async function handlePlayerDisconnect(
   payload: PlayerDisconnectPayload,
   wsManager: WebSocketManager
-): void {
+): Promise<void> {
   const { matchId, playerId } = payload;
 
   console.log(`Player ${playerId} disconnecting from match ${matchId}`);
 
   // Update player state to disconnected
-  const success = matchManager.updatePlayerState(
+  const success = await matchManager.updatePlayerState(
     matchId,
     playerId,
     "disconnected"
@@ -247,29 +278,34 @@ async function handleShotAttempt(
 
     // 1. Call scanQRFromBase64 to get QR code content
     const qrContent = await scanQRFromBase64(imageData);
-    
+
     let targetId: string | null = null;
-    
+
     // 2. Parse the QR content if found
     if (qrContent) {
       try {
         // Parse the JSON to extract playerId
         const qrData = JSON.parse(qrContent);
         console.log(`📄 Parsed QR data:`, qrData);
-        
+
         // Extract the playerId from the QR data
         if (qrData && qrData.playerId) {
           targetId = qrData.playerId;
           console.log(`✅ QR parsed successfully. Target player: ${targetId}`);
-          
+
           // Optional: Verify the matchId matches
           if (qrData.matchId && qrData.matchId !== matchId) {
-            console.warn(`⚠️ QR code is from different match: ${qrData.matchId} vs ${matchId}`);
+            console.warn(
+              `⚠️ QR code is from different match: ${qrData.matchId} vs ${matchId}`
+            );
             // You might want to treat this as a miss
             // targetId = null;
           }
         } else {
-          console.log(`❌ QR content doesn't contain playerId. QR data:`, qrData);
+          console.log(
+            `❌ QR content doesn't contain playerId. QR data:`,
+            qrData
+          );
         }
       } catch (parseError) {
         console.log(`❌ Failed to parse QR content as JSON: ${qrContent}`);
@@ -293,9 +329,7 @@ async function handleShotAttempt(
         type: "error",
         data: {
           message:
-            error instanceof Error
-              ? error.message
-              : "Shot processing failed",
+            error instanceof Error ? error.message : "Shot processing failed",
         },
       })
     );
@@ -312,7 +346,9 @@ async function handleAdminAction(
 ): Promise<void> {
   const { matchId, adminId, action } = payload;
 
-  console.log(`Admin action: ${action} for match ${matchId} by admin ${adminId}`);
+  console.log(
+    `Admin action: ${action} for match ${matchId} by admin ${adminId}`
+  );
 
   // Verify match exists
   const match = matchManager.getMatch(matchId);
@@ -333,7 +369,7 @@ async function handleAdminAction(
 
   switch (action) {
     case "start":
-      success = matchManager.startMatch(matchId, adminId);
+      success = await matchManager.startMatch(matchId, adminId);
       if (success) {
         broadcastEvent = "match:started";
         broadcastData = {
@@ -386,7 +422,10 @@ async function handleAdminAction(
   }
 
   if (!success) {
-    sendError(ws, `Failed to ${action} match. Check match state and permissions.`);
+    sendError(
+      ws,
+      `Failed to ${action} match. Check match state and permissions.`
+    );
     return;
   }
 
@@ -415,16 +454,15 @@ async function handleAdminAction(
   console.log(`Admin action ${action} completed for match ${matchId}`);
 }
 
-
 /**
  * Broadcast leaderboard update to all clients
  * This function should be called after score changes
  */
-export function broadcastLeaderboardUpdate(
+export async function broadcastLeaderboardUpdate(
   matchId: string,
   wsManager: WebSocketManager
-): void {
-  const leaderboard = matchManager.getLeaderboard(matchId);
+): Promise<void> {
+  const leaderboard = await matchManager.getLeaderboard(matchId);
 
   const payload: LeaderboardUpdatePayload = {
     matchId,

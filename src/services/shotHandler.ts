@@ -93,7 +93,7 @@ export async function handleShotResult(
 
     // 8. If hit, update shooter's score
     if (hit) {
-      const scoreUpdated = matchManager.updatePlayerScore(
+      const scoreUpdated = await matchManager.updatePlayerScore(
         matchId,
         shooterId,
         10
@@ -188,7 +188,7 @@ async function broadcastLeaderboardUpdate(
   matchId: string,
   wsManager: WebSocketManager
 ): Promise<void> {
-  const leaderboard = matchManager.getLeaderboard(matchId);
+  const leaderboard = await matchManager.getLeaderboard(matchId);
 
   const payload: LeaderboardUpdatePayload = {
     matchId,
@@ -223,11 +223,15 @@ export async function broadcastResult(
   targetId: string | null,
   wsManager: WebSocketManager
 ): Promise<void> {
-  console.log(`broadcastResult called: match ${matchId}, shooter ${shooterId}, target ${targetId || 'MISS'}`);
-  
+  console.log(
+    `broadcastResult called: match ${matchId}, shooter ${shooterId}, target ${
+      targetId || "MISS"
+    }`
+  );
+
   // STUB IMPLEMENTATION
   // TODO: Implement actual broadcasting logic
   // For now, delegate to handleShotResult
-  
+
   await handleShotResult(matchId, shooterId, targetId, wsManager);
 }

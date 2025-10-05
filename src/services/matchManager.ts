@@ -38,7 +38,6 @@ class MatchManager {
       const match: Match = {
         id: matchId,
         state: "waiting",
-        players: new Map(),
         adminId,
         createdAt: new Date(),
       };
@@ -76,7 +75,6 @@ class MatchManager {
           adminPlayer.qrCodeBase64 = "";
         });
 
-      match.players.set(adminId, adminPlayer);
       this.matches.set(matchId, match);
 
       console.log(`Match created: ${matchId} with admin: ${adminName}`);
@@ -136,15 +134,17 @@ class MatchManager {
         return null;
       }
 
-      if (match.state !== "waiting") {
+      // Allow new players to join only in "waiting" or "ended" states
+      if (match.state !== "waiting" && match.state !== "ended") {
         console.error(
-          `Match ${matchId} is not in waiting state (current: ${match.state})`
+          `Match ${matchId} is not in waiting or ended state (current: ${match.state})`
         );
         return null;
       }
 
-      // Check if player name already exists in match
-      const existingPlayer = Array.from(match.players.values()).find(
+      // Check if player name already exists in match by querying sub-collection
+      const existingPlayers = await matchRepository.getPlayers(matchId);
+      const existingPlayer = existingPlayers.find(
         (p) => p.name.toLowerCase() === playerName.trim().toLowerCase()
       );
 
@@ -189,7 +189,6 @@ class MatchManager {
         scoreHistory: [],
       };
 
-      match.players.set(playerId, player);
       console.log(`Player ${playerId} (${playerName}) joined match ${matchId}`);
 
       // Save player to Firebase (async, non-blocking)
@@ -207,58 +206,51 @@ class MatchManager {
   /**
    * Remove a player from a match
    */
-  removePlayer(matchId: string, playerId: string): boolean {
+  async removePlayer(matchId: string, playerId: string): Promise<boolean> {
     const match = this.matches.get(matchId);
     if (!match) {
       return false;
     }
 
-    const removed = match.players.delete(playerId);
-    if (removed) {
-      console.log(`Player ${playerId} left match ${matchId}`);
-
+    try {
       // Remove from Firebase
-      matchRepository.removePlayer(matchId, playerId).catch((err) => {
-        console.error("Failed to remove player from Firebase:", err);
-      });
+      await matchRepository.removePlayer(matchId, playerId);
+      console.log(`Player ${playerId} left match ${matchId}`);
+      return true;
+    } catch (error) {
+      console.error("Failed to remove player from Firebase:", error);
+      return false;
     }
-
-    return removed;
   }
 
   /**
    * Update player state
    */
-  updatePlayerState(
+  async updatePlayerState(
     matchId: string,
     playerId: string,
     state: PlayerState
-  ): boolean {
+  ): Promise<boolean> {
     const match = this.matches.get(matchId);
     if (!match) {
       return false;
     }
 
-    const player = match.players.get(playerId);
-    if (!player) {
+    try {
+      // Update Firebase
+      await matchRepository.updatePlayerState(matchId, playerId, state);
+      console.log(`Player ${playerId} state updated to ${state}`);
+      return true;
+    } catch (error) {
+      console.error("Failed to update player state in Firebase:", error);
       return false;
     }
-
-    player.state = state;
-    console.log(`Player ${playerId} state updated to ${state}`);
-
-    // Update Firebase
-    matchRepository.updatePlayerState(matchId, playerId, state).catch((err) => {
-      console.error("Failed to update player state in Firebase:", err);
-    });
-
-    return true;
   }
 
   /**
    * Start a match (admin only)
    */
-  startMatch(matchId: string, adminId: string): boolean {
+  async startMatch(matchId: string, adminId: string): Promise<boolean> {
     const match = this.matches.get(matchId);
     if (!match) {
       return false;
@@ -269,21 +261,47 @@ class MatchManager {
       return false;
     }
 
-    if (match.state !== "waiting") {
+    // Allow starting from "waiting" or "ended" states (for restart functionality)
+    if (match.state !== "waiting" && match.state !== "ended") {
       console.error(
         `Match ${matchId} cannot be started from state ${match.state}`
       );
       return false;
     }
 
-    if (match.players.size < 2) {
+    // Check player count from sub-collection
+    const players = await matchRepository.getPlayers(matchId);
+    if (players.length < 2) {
       console.error(`Match ${matchId} needs at least 2 players to start`);
       return false;
     }
 
+    // Check if this is a restart from "ended" state
+    const isRestart = match.state === "ended";
+
     match.state = "active";
     match.startedAt = new Date();
-    console.log(`Match ${matchId} started with ${match.players.size} players`);
+    console.log(`Match ${matchId} started with ${players.length} players`);
+
+    // If restarting from "ended" state, reset all player scores
+    if (isRestart) {
+      console.log(`Resetting all player scores for match restart`);
+      for (const player of players) {
+        player.score = 0;
+        player.shots = 0;
+        player.inventory = [];
+        player.scoreHistory = [];
+        console.log(`Reset player ${player.name}: score=0, shots=0`);
+
+        // Update player in Firebase
+        matchRepository.savePlayer(matchId, player).catch((err) => {
+          console.error(
+            `Failed to reset player ${player.id} in Firebase:`,
+            err
+          );
+        });
+      }
+    }
 
     // Update Firebase
     matchRepository
@@ -394,32 +412,38 @@ class MatchManager {
   /**
    * Get leaderboard for a match
    */
-  getLeaderboard(matchId: string): LeaderboardEntry[] {
+  async getLeaderboard(matchId: string): Promise<LeaderboardEntry[]> {
     const match = this.matches.get(matchId);
     if (!match) {
       return [];
     }
 
-    const leaderboard: LeaderboardEntry[] = Array.from(match.players.values())
-      .map((player) => ({
-        playerId: player.id,
-        playerName: player.name,
-        score: player.score,
-        shots: player.shots,
-        rank: 0,
-        hits: 0,
-        role: player.role,
-      }))
-      .sort((a, b) => b.score - a.score);
+    try {
+      const players = await matchRepository.getPlayers(matchId);
+      const leaderboard: LeaderboardEntry[] = players
+        .map((player) => ({
+          playerId: player.id,
+          playerName: player.name,
+          score: player.score,
+          shots: player.shots,
+          rank: 0,
+          hits: 0,
+          role: player.role,
+        }))
+        .sort((a, b) => b.score - a.score);
 
-    return leaderboard;
+      return leaderboard;
+    } catch (error) {
+      console.error("Error getting leaderboard:", error);
+      return [];
+    }
   }
 
   /**
    * Get winner of a match
    */
-  getWinner(matchId: string): LeaderboardEntry | null {
-    const leaderboard = this.getLeaderboard(matchId);
+  async getWinner(matchId: string): Promise<LeaderboardEntry | null> {
+    const leaderboard = await this.getLeaderboard(matchId);
     return leaderboard.length > 0 ? leaderboard[0]! : null;
   }
 
@@ -427,57 +451,87 @@ class MatchManager {
    * Update player score (called after successful shot)
    * TO BE USED BY SHOT PROCESSING LOGIC
    */
-  updatePlayerScore(
+  async updatePlayerScore(
     matchId: string,
     playerId: string,
     pointsToAdd: number
-  ): boolean {
+  ): Promise<boolean> {
     const match = this.matches.get(matchId);
     if (!match) {
+      console.log(`Match ${matchId} not found in memory for score update`);
       return false;
     }
 
-    const player = match.players.get(playerId);
-    if (!player) {
+    try {
+      // Get current player data from sub-collection
+      const player = await matchRepository.getPlayer(matchId, playerId);
+      if (!player) {
+        console.log(
+          `Player ${playerId} not found in match ${matchId} for score update`
+        );
+        return false;
+      }
+
+      const newScore = player.score + pointsToAdd;
+      const newShots = player.shots + 1;
+
+      console.log(
+        `Player ${playerId} score updated: ${newScore}, shots: ${newShots}`
+      );
+
+      // Update Firebase
+      await matchRepository.updatePlayerScore(
+        matchId,
+        playerId,
+        newScore,
+        newShots
+      );
+      console.log(
+        `Player ${playerId} score saved to Firebase: ${newScore}, shots: ${newShots}`
+      );
+
+      return true;
+    } catch (error) {
+      console.error("Failed to update player score:", error);
       return false;
     }
-
-    player.score += pointsToAdd;
-    player.shots += 1;
-    console.log(`Player ${playerId} score updated: ${player.score}`);
-
-    // Update Firebase
-    matchRepository
-      .updatePlayerScore(matchId, playerId, player.score, player.shots)
-      .catch((err) => {
-        console.error("Failed to update player score in Firebase:", err);
-      });
-
-    return true;
   }
 
   /**
    * Get all players in a match
    */
-  getPlayers(matchId: string): Player[] {
+  async getPlayers(matchId: string): Promise<Player[]> {
     const match = this.matches.get(matchId);
     if (!match) {
       return [];
     }
 
-    return Array.from(match.players.values());
+    try {
+      return await matchRepository.getPlayers(matchId);
+    } catch (error) {
+      console.error("Error getting players:", error);
+      return [];
+    }
   }
 
   /**
    * Get a specific player
    */
-  getPlayer(matchId: string, playerId: string): Player | undefined {
+  async getPlayer(
+    matchId: string,
+    playerId: string
+  ): Promise<Player | undefined> {
     const match = this.matches.get(matchId);
     if (!match) {
       return undefined;
     }
 
-    return match.players.get(playerId);
+    try {
+      return (await matchRepository.getPlayer(matchId, playerId)) || undefined;
+    } catch (error) {
+      console.error("Error getting player:", error);
+      return undefined;
+    }
   }
 
   /**
@@ -518,7 +572,7 @@ class MatchManager {
       const qrCodeBase64 = await QRCode.toDataURL(jsonString, {
         width: 256,
         margin: 2,
-        errorCorrectionLevel: 'H',
+        errorCorrectionLevel: "H",
         color: {
           dark: "#000000",
           light: "#FFFFFF",
@@ -557,17 +611,23 @@ class MatchManager {
       return [];
     }
 
-    const qrCodes = [];
-    for (const player of match.players.values()) {
-      qrCodes.push({
-        playerId: player.id,
-        playerName: player.name,
-        qrCode: player.qrCode,
-        qrCodeBase64: player.qrCodeBase64,
-      });
-    }
+    try {
+      const players = await matchRepository.getPlayers(matchId);
+      const qrCodes = [];
+      for (const player of players) {
+        qrCodes.push({
+          playerId: player.id,
+          playerName: player.name,
+          qrCode: player.qrCode,
+          qrCodeBase64: player.qrCodeBase64,
+        });
+      }
 
-    return qrCodes;
+      return qrCodes;
+    } catch (error) {
+      console.error("Error getting QR codes:", error);
+      return [];
+    }
   }
 
   /**
@@ -585,24 +645,28 @@ class MatchManager {
    * Validate QR code data
    * TO BE USED BY SHOT PROCESSING LOGIC
    */
-  validateQrCode(qrData: string): {
+  async validateQrCode(qrData: string): Promise<{
     valid: boolean;
     matchId?: string;
     playerId?: string;
-  } {
+  }> {
     try {
       const parsed = JSON.parse(qrData);
       if (!parsed.matchId || !parsed.playerId) {
         return { valid: false };
       }
 
-      // Check if match and player exist
+      // Check if match exists
       const match = this.matches.get(parsed.matchId);
       if (!match) {
         return { valid: false };
       }
 
-      const player = match.players.get(parsed.playerId);
+      // Check if player exists in sub-collection
+      const player = await matchRepository.getPlayer(
+        parsed.matchId,
+        parsed.playerId
+      );
       if (!player) {
         return { valid: false };
       }
@@ -615,6 +679,116 @@ class MatchManager {
     } catch (error) {
       console.error("Invalid QR code data:", error);
       return { valid: false };
+    }
+  }
+
+  /**
+   * Load all matches from database on startup
+   */
+  async loadMatchesFromDatabase(): Promise<void> {
+    try {
+      console.log("🔄 Loading matches from database...");
+      const matches = await matchRepository.loadAllMatches();
+
+      for (const match of matches) {
+        this.matches.set(match.id, match);
+        // Get player count from sub-collection
+        const players = await matchRepository.getPlayers(match.id);
+        console.log(
+          `✅ Loaded match ${match.id} with ${players.length} players`
+        );
+      }
+
+      console.log(`✅ Loaded ${matches.length} matches from database`);
+    } catch (error) {
+      console.error("❌ Failed to load matches from database:", error);
+      // Don't throw - allow server to start even if database loading fails
+    }
+  }
+
+  /**
+   * Load a specific match from database
+   */
+  async loadMatchFromDatabase(matchId: string): Promise<Match | null> {
+    try {
+      const match = await matchRepository.loadMatch(matchId);
+      if (match) {
+        this.matches.set(match.id, match);
+        console.log(`✅ Loaded match ${matchId} from database`);
+      }
+      return match;
+    } catch (error) {
+      console.error(`❌ Failed to load match ${matchId} from database:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Rejoin an existing player to a match
+   */
+  async rejoinPlayer(
+    matchId: string,
+    playerName: string
+  ): Promise<Player | null> {
+    try {
+      // First, try to load the match from database if not in memory
+      let match = this.matches.get(matchId);
+      if (!match) {
+        console.log(`Match ${matchId} not in memory, loading from database...`);
+        const loadedMatch = await this.loadMatchFromDatabase(matchId);
+        if (!loadedMatch) {
+          console.log(`Match ${matchId} not found in database`);
+          return null;
+        }
+        match = loadedMatch;
+        // Store the loaded match in memory
+        this.matches.set(matchId, match);
+        console.log(
+          `Match ${matchId} loaded from database and stored in memory`
+        );
+      }
+
+      // Find existing player by name from sub-collection
+      const players = await matchRepository.getPlayers(matchId);
+      const existingPlayer = players.find(
+        (p) => p.name.toLowerCase() === playerName.trim().toLowerCase()
+      );
+
+      if (!existingPlayer) {
+        console.log(`Player "${playerName}" not found in match ${matchId}`);
+        return null;
+      }
+
+      // Load fresh player data from database to get latest inventory and scores
+      const freshPlayer = await matchRepository.getPlayer(
+        matchId,
+        existingPlayer.id
+      );
+      if (freshPlayer) {
+        // Update the existing player with fresh data
+        existingPlayer.inventory = freshPlayer.inventory;
+        existingPlayer.scoreHistory = freshPlayer.scoreHistory;
+        existingPlayer.score = freshPlayer.score;
+        existingPlayer.shots = freshPlayer.shots;
+        console.log(
+          `Loaded fresh player data: score=${freshPlayer.score}, shots=${freshPlayer.shots}`
+        );
+      }
+
+      // Update player state to connected
+      existingPlayer.state = "connected";
+      existingPlayer.isActive = true;
+
+      // Save updated player state to database
+      await matchRepository.savePlayer(matchId, existingPlayer);
+
+      console.log(
+        `Player ${existingPlayer.id} (${playerName}) rejoined match ${matchId}`
+      );
+      return existingPlayer;
+    } catch (error) {
+      console.error("Error rejoining player:", error);
+      return null;
     }
   }
 }

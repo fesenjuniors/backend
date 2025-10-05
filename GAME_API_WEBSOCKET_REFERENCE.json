@@ -1,0 +1,664 @@
+{
+  "game_api_reference": {
+    "version": "1.0.0",
+    "description": "Complete API and WebSocket reference for the game backend",
+    "last_updated": "2025-01-27",
+
+    "base_url": "http://localhost:8080",
+    "websocket_url": "ws://localhost:8080/ws",
+
+    "api_endpoints": {
+      "match_management": {
+        "create_match": {
+          "endpoint": "POST /api/match/create",
+          "description": "Create a new match with admin player",
+          "request_body": {
+            "adminName": "string (required, max 50 chars)"
+          },
+          "response_success": {
+            "status": 201,
+            "body": {
+              "matchId": "string",
+              "adminId": "string",
+              "adminName": "string",
+              "createdAt": "ISO string"
+            }
+          },
+          "response_error": {
+            "status": 400,
+            "body": {
+              "error": "string",
+              "details": "string"
+            }
+          }
+        },
+
+        "get_match_details": {
+          "endpoint": "GET /api/match/:matchId",
+          "description": "Get match information and player list",
+          "response_success": {
+            "status": 200,
+            "body": {
+              "id": "string",
+              "state": "waiting | active | paused | ended",
+              "adminId": "string",
+              "players": [
+                {
+                  "id": "string",
+                  "name": "string",
+                  "score": "number",
+                  "shots": "number",
+                  "state": "connected | disconnected",
+                  "role": "admin | player",
+                  "joinedAt": "ISO string"
+                }
+              ],
+              "totalPlayers": "number",
+              "createdAt": "ISO string",
+              "startedAt": "ISO string or null",
+              "endedAt": "ISO string or null"
+            }
+          }
+        },
+
+        "get_match_players": {
+          "endpoint": "GET /api/match/:matchId/players",
+          "description": "Get detailed player information including inventory and scores",
+          "response_success": {
+            "status": 200,
+            "body": {
+              "matchId": "string",
+              "players": [
+                {
+                  "id": "string",
+                  "name": "string",
+                  "score": "number",
+                  "shots": "number",
+                  "state": "connected | disconnected",
+                  "role": "admin | player",
+                  "isActive": "boolean",
+                  "joinedAt": "ISO string",
+                  "inventory": "array of inventory items",
+                  "scoreHistory": "array of score entries"
+                }
+              ],
+              "totalPlayers": "number",
+              "adminId": "string"
+            }
+          }
+        },
+
+        "get_leaderboard": {
+          "endpoint": "GET /api/match/:matchId/leaderboard",
+          "description": "Get match leaderboard with player rankings",
+          "response_success": {
+            "status": 200,
+            "body": {
+              "matchId": "string",
+              "leaderboard": [
+                {
+                  "playerId": "string",
+                  "playerName": "string",
+                  "score": "number",
+                  "shots": "number",
+                  "rank": "number",
+                  "hits": "number",
+                  "role": "admin | player"
+                }
+              ],
+              "totalPlayers": "number",
+              "adminId": "string"
+            }
+          }
+        }
+      },
+
+      "player_management": {
+        "join_match": {
+          "endpoint": "POST /api/match/:matchId/join",
+          "description": "Join a match as new player or rejoin existing player",
+          "request_body": {
+            "playerName": "string (required, max 50 chars)"
+          },
+          "response_new_player": {
+            "status": 201,
+            "body": {
+              "success": true,
+              "message": "Successfully joined match",
+              "player": {
+                "id": "string",
+                "name": "string",
+                "qrCode": "string (JSON for scanning)",
+                "qrCodeBase64": "string (base64 image)",
+                "matchId": "string",
+                "role": "player",
+                "score": 0,
+                "shots": 0,
+                "inventory": [],
+                "scoreHistory": []
+              }
+            }
+          },
+          "response_rejoin": {
+            "status": 200,
+            "body": {
+              "success": true,
+              "message": "Successfully rejoined match",
+              "player": {
+                "id": "string",
+                "name": "string",
+                "qrCode": "string (same as original)",
+                "qrCodeBase64": "string (same as original)",
+                "matchId": "string",
+                "role": "player",
+                "score": "number (preserved)",
+                "shots": "number (preserved)",
+                "inventory": "array (preserved)",
+                "scoreHistory": "array (preserved)"
+              }
+            }
+          },
+          "response_error": {
+            "status": 400,
+            "body": {
+              "error": "Failed to join match",
+              "details": "Match may have already started or is full"
+            }
+          }
+        }
+      },
+
+      "match_control": {
+        "start_match": {
+          "endpoint": "POST /api/match/:matchId/start",
+          "description": "Start a match (admin only). Resets all player scores if restarting from ended state.",
+          "request_body": {
+            "adminId": "string (required)"
+          },
+          "response_success": {
+            "status": 200,
+            "body": {
+              "matchId": "string",
+              "state": "active",
+              "startedAt": "ISO string"
+            }
+          },
+          "response_error": {
+            "status": 400,
+            "body": {
+              "error": "Failed to start match. Check admin permissions, match state and player count."
+            }
+          }
+        },
+
+        "pause_match": {
+          "endpoint": "POST /api/match/:matchId/pause",
+          "description": "Pause an active match (admin only)",
+          "request_body": {
+            "adminId": "string (required)"
+          },
+          "response_success": {
+            "status": 200,
+            "body": {
+              "matchId": "string",
+              "state": "paused",
+              "pausedAt": "ISO string"
+            }
+          }
+        },
+
+        "resume_match": {
+          "endpoint": "POST /api/match/:matchId/resume",
+          "description": "Resume a paused match (admin only)",
+          "request_body": {
+            "adminId": "string (required)"
+          },
+          "response_success": {
+            "status": 200,
+            "body": {
+              "matchId": "string",
+              "state": "active"
+            }
+          }
+        },
+
+        "end_match": {
+          "endpoint": "POST /api/match/:matchId/end",
+          "description": "End a match (admin only)",
+          "request_body": {
+            "adminId": "string (required)"
+          },
+          "response_success": {
+            "status": 200,
+            "body": {
+              "matchId": "string",
+              "state": "ended",
+              "endedAt": "ISO string",
+              "winner": {
+                "playerId": "string",
+                "playerName": "string",
+                "score": "number",
+                "shots": "number",
+                "rank": 1,
+                "hits": "number",
+                "role": "admin | player"
+              }
+            }
+          }
+        }
+      },
+
+      "shot_processing": {
+        "process_shot": {
+          "endpoint": "POST /api/match/:matchId/shot",
+          "description": "Process a shot (QR code scan or image upload)",
+          "request_body": {
+            "qrCode": "string (optional, JSON string from QR scan)",
+            "image": "base64 string (optional, image data)",
+            "playerId": "string (optional, if known)"
+          },
+          "response_success": {
+            "status": 200,
+            "body": {
+              "success": true,
+              "message": "Shot processed successfully",
+              "result": {
+                "hit": "boolean",
+                "points": "number",
+                "targetPlayer": {
+                  "id": "string",
+                  "name": "string"
+                },
+                "shooter": {
+                  "id": "string",
+                  "name": "string",
+                  "newScore": "number",
+                  "newShots": "number"
+                }
+              }
+            }
+          },
+          "response_error": {
+            "status": 400,
+            "body": {
+              "error": "Invalid shot data",
+              "details": "string"
+            }
+          }
+        }
+      }
+    },
+
+    "websocket_events": {
+      "connection": {
+        "endpoint": "ws://localhost:8080/ws",
+        "description": "WebSocket connection for real-time game updates",
+        "authentication": "None required - public connection"
+      },
+
+      "client_to_server": {
+        "join_match": {
+          "type": "join_match",
+          "data": {
+            "matchId": "string",
+            "playerId": "string"
+          },
+          "description": "Client joins a match room for real-time updates"
+        },
+
+        "leave_match": {
+          "type": "leave_match",
+          "data": {
+            "matchId": "string",
+            "playerId": "string"
+          },
+          "description": "Client leaves a match room"
+        },
+
+        "player_connect": {
+          "type": "player_connect",
+          "data": {
+            "matchId": "string",
+            "playerId": "string",
+            "playerName": "string"
+          },
+          "description": "Notify server of player connection"
+        },
+
+        "player_disconnect": {
+          "type": "player_disconnect",
+          "data": {
+            "matchId": "string",
+            "playerId": "string"
+          },
+          "description": "Notify server of player disconnection"
+        }
+      },
+
+      "server_to_client": {
+        "match_events": {
+          "match_started": {
+            "type": "match:started",
+            "data": {
+              "matchId": "string",
+              "startedAt": "ISO string"
+            },
+            "description": "Broadcast when match starts"
+          },
+
+          "match_paused": {
+            "type": "match:paused",
+            "data": {
+              "matchId": "string",
+              "pausedAt": "ISO string",
+              "adminId": "string"
+            },
+            "description": "Broadcast when match is paused"
+          },
+
+          "match_resumed": {
+            "type": "match:resumed",
+            "data": {
+              "matchId": "string",
+              "resumedAt": "ISO string",
+              "adminId": "string"
+            },
+            "description": "Broadcast when match resumes"
+          },
+
+          "match_ended": {
+            "type": "match:ended",
+            "data": {
+              "matchId": "string",
+              "endedAt": "ISO string",
+              "winner": {
+                "playerId": "string",
+                "playerName": "string",
+                "score": "number",
+                "shots": "number",
+                "rank": 1,
+                "hits": "number",
+                "role": "admin | player"
+              }
+            },
+            "description": "Broadcast when match ends"
+          }
+        },
+
+        "player_events": {
+          "player_joined": {
+            "type": "player:joined",
+            "data": {
+              "matchId": "string",
+              "player": {
+                "id": "string",
+                "name": "string",
+                "role": "admin | player",
+                "score": "number",
+                "shots": "number",
+                "state": "connected | disconnected",
+                "joinedAt": "ISO string"
+              }
+            },
+            "description": "Broadcast when new player joins"
+          },
+
+          "player_left": {
+            "type": "player:left",
+            "data": {
+              "matchId": "string",
+              "playerId": "string",
+              "playerName": "string"
+            },
+            "description": "Broadcast when player leaves"
+          },
+
+          "player_rejoined": {
+            "type": "player:rejoined",
+            "data": {
+              "matchId": "string",
+              "player": {
+                "id": "string",
+                "name": "string",
+                "role": "admin | player",
+                "score": "number (preserved)",
+                "shots": "number (preserved)",
+                "inventory": "array (preserved)",
+                "scoreHistory": "array (preserved)",
+                "state": "connected"
+              }
+            },
+            "description": "Broadcast when existing player rejoins"
+          }
+        },
+
+        "game_events": {
+          "shot_processed": {
+            "type": "shot:processed",
+            "data": {
+              "matchId": "string",
+              "result": {
+                "hit": "boolean",
+                "points": "number",
+                "targetPlayer": {
+                  "id": "string",
+                  "name": "string"
+                },
+                "shooter": {
+                  "id": "string",
+                  "name": "string",
+                  "newScore": "number",
+                  "newShots": "number"
+                }
+              }
+            },
+            "description": "Broadcast when shot is processed"
+          },
+
+          "score_updated": {
+            "type": "score:updated",
+            "data": {
+              "matchId": "string",
+              "playerId": "string",
+              "playerName": "string",
+              "newScore": "number",
+              "newShots": "number",
+              "pointsAdded": "number"
+            },
+            "description": "Broadcast when player score updates"
+          },
+
+          "leaderboard_updated": {
+            "type": "leaderboard:updated",
+            "data": {
+              "matchId": "string",
+              "leaderboard": [
+                {
+                  "playerId": "string",
+                  "playerName": "string",
+                  "score": "number",
+                  "shots": "number",
+                  "rank": "number",
+                  "hits": "number",
+                  "role": "admin | player"
+                }
+              ]
+            },
+            "description": "Broadcast when leaderboard changes"
+          }
+        },
+
+        "inventory_events": {
+          "item_picked_up": {
+            "type": "inventory:item_picked_up",
+            "data": {
+              "matchId": "string",
+              "playerId": "string",
+              "item": {
+                "id": "string",
+                "type": "plastic_bottle | can | paper | glass | organic | metal | cardboard | other",
+                "name": "string",
+                "description": "string",
+                "value": "number",
+                "potentialScore": "number",
+                "pickedUpAt": "ISO string",
+                "location": {
+                  "lat": "number",
+                  "lng": "number"
+                },
+                "metadata": "object"
+              }
+            },
+            "description": "Broadcast when player picks up item"
+          },
+
+          "item_dropped_off": {
+            "type": "inventory:item_dropped_off",
+            "data": {
+              "matchId": "string",
+              "playerId": "string",
+              "item": {
+                "id": "string",
+                "type": "string",
+                "name": "string",
+                "value": "number",
+                "droppedOffAt": "ISO string"
+              },
+              "pointsEarned": "number"
+            },
+            "description": "Broadcast when player drops off item"
+          }
+        }
+      }
+    },
+
+    "data_structures": {
+      "player_object": {
+        "id": "string (unique player ID)",
+        "name": "string (player name)",
+        "qrCode": "string (JSON string for QR scanning)",
+        "qrCodeBase64": "string (base64 encoded QR image)",
+        "matchId": "string (match ID)",
+        "role": "admin | player",
+        "score": "number (current score)",
+        "shots": "number (total shots taken)",
+        "inventory": "array of inventory items",
+        "scoreHistory": "array of score entries",
+        "state": "connected | disconnected",
+        "isActive": "boolean",
+        "joinedAt": "ISO string"
+      },
+
+      "inventory_item": {
+        "id": "string",
+        "type": "plastic_bottle | can | paper | glass | organic | metal | cardboard | other",
+        "name": "string",
+        "description": "string",
+        "value": "number (points worth)",
+        "potentialScore": "number (max points possible)",
+        "pickedUpAt": "ISO string",
+        "location": {
+          "lat": "number",
+          "lng": "number"
+        },
+        "metadata": "object"
+      },
+
+      "score_entry": {
+        "id": "string",
+        "type": "shot_hit | item_dropoff | bonus | penalty",
+        "points": "number",
+        "description": "string",
+        "timestamp": "ISO string",
+        "metadata": "object"
+      },
+
+      "qr_code_data": {
+        "matchId": "string",
+        "playerId": "string",
+        "timestamp": "ISO string"
+      }
+    },
+
+    "match_states": {
+      "waiting": {
+        "description": "Match created, waiting for players to join",
+        "allowed_actions": {
+          "new_players": "can join",
+          "existing_players": "can rejoin",
+          "admin": "can start match"
+        }
+      },
+      "active": {
+        "description": "Match is running, players can shoot and score",
+        "allowed_actions": {
+          "new_players": "cannot join",
+          "existing_players": "can rejoin",
+          "admin": "can pause or end match"
+        }
+      },
+      "paused": {
+        "description": "Match is temporarily paused",
+        "allowed_actions": {
+          "new_players": "cannot join",
+          "existing_players": "can rejoin",
+          "admin": "can resume or end match"
+        }
+      },
+      "ended": {
+        "description": "Match has finished",
+        "allowed_actions": {
+          "new_players": "can join (for next round)",
+          "existing_players": "can rejoin",
+          "admin": "can restart match (resets all scores)"
+        }
+      }
+    },
+
+    "key_features": {
+      "player_rejoin": {
+        "description": "Players can rejoin at ANY time using their QR codes",
+        "benefits": [
+          "No need to print new QR codes",
+          "QR codes work across match restarts",
+          "Player data (scores, inventory) is preserved"
+        ]
+      },
+      "match_restart": {
+        "description": "Admin can restart matches to reset all scores",
+        "benefits": [
+          "Fresh start for new rounds",
+          "All player scores reset to 0",
+          "New players can join between rounds"
+        ]
+      },
+      "real_time_updates": {
+        "description": "WebSocket provides real-time game updates",
+        "benefits": [
+          "Live leaderboard updates",
+          "Real-time shot processing",
+          "Instant player join/leave notifications"
+        ]
+      }
+    },
+
+    "usage_examples": {
+      "create_and_join_match": {
+        "step_1": "POST /api/match/create with {\"adminName\": \"Admin Player\"}",
+        "step_2": "POST /api/match/{matchId}/join with {\"playerName\": \"Player 1\"}",
+        "step_3": "Connect to WebSocket ws://localhost:8080/ws",
+        "step_4": "Send {\"type\": \"join_match\", \"data\": {\"matchId\": \"...\", \"playerId\": \"...\"}}"
+      },
+      "process_shot": {
+        "method_1": "POST /api/match/{matchId}/shot with {\"qrCode\": \"{...}\"}",
+        "method_2": "POST /api/match/{matchId}/shot with {\"image\": \"base64...\"}",
+        "result": "WebSocket broadcasts shot:processed event to all players"
+      },
+      "player_rejoin": {
+        "step_1": "POST /api/match/{matchId}/join with {\"playerName\": \"Existing Player\"}",
+        "step_2": "Server returns existing player data with preserved scores",
+        "step_3": "WebSocket broadcasts player:rejoined event"
+      }
+    }
+  }
+}

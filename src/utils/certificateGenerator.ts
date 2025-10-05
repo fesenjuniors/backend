@@ -17,12 +17,14 @@ const DEFAULT_OPTIONS: Required<CertificateOptions> = {
   caCertPath: path.join(process.cwd(), "certs", "ca-cert.pem"),
   caKeyPath: path.join(process.cwd(), "certs", "ca-key.pem"),
   validity: 365,
-  commonName: "localhost"
+  commonName: "localhost",
 };
 
-export function generateSelfSignedCertificate(options: CertificateOptions = {}): { cert: string; key: string; ca?: string } {
+export function generateSelfSignedCertificate(
+  options: CertificateOptions = {}
+): { cert: string; key: string; ca?: string } {
   const config = { ...DEFAULT_OPTIONS, ...options };
-  
+
   // Ensure certificates directory exists
   const certsDir = path.dirname(config.certPath);
   if (!fs.existsSync(certsDir)) {
@@ -46,7 +48,9 @@ export function generateSelfSignedCertificate(options: CertificateOptions = {}):
 
   try {
     // Generate a private key
-    execSync(`openssl genrsa -out "${config.keyPath}" 2048`, { stdio: "ignore" });
+    execSync(`openssl genrsa -out "${config.keyPath}" 2048`, {
+      stdio: "ignore",
+    });
 
     // Generate a certificate signing request (CSR)
     const subj = `/C=US/ST=State/L=City/O=Organization/CN=${config.commonName}`;
@@ -89,7 +93,7 @@ IP.3 = 0.0.0.0
 
     return {
       cert: config.certPath,
-      key: config.keyPath
+      key: config.keyPath,
     };
   } catch (error) {
     console.error("Failed to generate SSL certificates:", error);
@@ -100,15 +104,15 @@ IP.3 = 0.0.0.0
 
 export function loadCertificates(options: CertificateOptions = {}) {
   const paths = generateSelfSignedCertificate(options);
-  
+
   const result: { cert: Buffer; key: Buffer; ca?: Buffer } = {
     cert: fs.readFileSync(paths.cert),
     key: fs.readFileSync(paths.key),
   };
-  
+
   if (paths.ca) {
     result.ca = fs.readFileSync(paths.ca);
   }
-  
+
   return result;
 }
