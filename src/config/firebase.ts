@@ -6,11 +6,10 @@ let db: Firestore;
 
 /**
  * Initialize Firebase Admin SDK
- * 
- * Environment variables required:
- * - FIREBASE_PROJECT_ID
- * - FIREBASE_PRIVATE_KEY (base64 encoded or raw with escaped newlines)
- * - FIREBASE_CLIENT_EMAIL
+ *
+ * Environment variables required (choose one):
+ * Option A: GOOGLE_APPLICATION_CREDENTIALS=./path/to/service-account.json
+ * Option B: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
  */
 export function initializeFirebase(): void {
   if (getApps().length > 0) {
@@ -19,34 +18,49 @@ export function initializeFirebase(): void {
   }
 
   try {
-    const projectId = process.env.FIREBASE_PROJECT_ID;
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+    // Check for service account file first (Option A)
+    const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
-    if (!projectId || !clientEmail || !privateKey) {
-      console.warn(
-        "Firebase credentials not found. Running in development mode without Firebase."
-      );
-      console.warn("Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY to enable Firebase.");
-      return;
-    }
+    if (credentialsPath) {
+      // Use service account file
+      console.log(`Using Firebase credentials from: ${credentialsPath}`);
 
-    // Handle base64 encoded private key or escaped newlines
-    if (!privateKey.includes("BEGIN PRIVATE KEY")) {
-      // Assume base64 encoded
-      privateKey = Buffer.from(privateKey, "base64").toString("utf8");
+      firebaseApp = initializeApp({
+        credential: cert(credentialsPath),
+      });
     } else {
-      // Replace escaped newlines
-      privateKey = privateKey.replace(/\\n/g, "\n");
-    }
+      // Fall back to individual environment variables (Option B)
+      const projectId = process.env.FIREBASE_PROJECT_ID;
+      const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+      let privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
-    firebaseApp = initializeApp({
-      credential: cert({
-        projectId,
-        clientEmail,
-        privateKey,
-      }),
-    });
+      if (!projectId || !clientEmail || !privateKey) {
+        console.warn(
+          "Firebase credentials not found. Running in development mode without Firebase."
+        );
+        console.warn(
+          "Set GOOGLE_APPLICATION_CREDENTIALS or FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY to enable Firebase."
+        );
+        return;
+      }
+
+      // Handle base64 encoded private key or escaped newlines
+      if (!privateKey.includes("BEGIN PRIVATE KEY")) {
+        // Assume base64 encoded
+        privateKey = Buffer.from(privateKey, "base64").toString("utf8");
+      } else {
+        // Replace escaped newlines
+        privateKey = privateKey.replace(/\\n/g, "\n");
+      }
+
+      firebaseApp = initializeApp({
+        credential: cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        }),
+      });
+    }
 
     db = getFirestore(firebaseApp);
     console.log("Firebase initialized successfully");

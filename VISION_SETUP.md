@@ -29,10 +29,10 @@
 ### 4. Set Environment Variable
 ```bash
 # Option A: Export (temporary)
-export GOOGLE_APPLICATION_CREDENTIALS="/home/kian/backend-1/google-credentials.json"
+export GOOGLE_APPLICATION_CREDENTIALS="/home/kian/backend/google-credentials.json"
 
 # Option B: Add to .env file (permanent)
-echo 'GOOGLE_APPLICATION_CREDENTIALS=/home/kian/backend-1/google-credentials.json' >> .env
+echo 'GOOGLE_APPLICATION_CREDENTIALS=/home/kian/backend/google-credentials.json' >> .env
 ```
 
 ### 5. Load credentials in code
@@ -45,7 +45,7 @@ if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
 
 ### 6. Test it!
 ```bash
-npx ts-node test-vision.ts /home/kian/backend-1/src/test-pictures/IMG_6025.jpg
+npx ts-node test-vision.ts /home/kian/backend/src/test-pictures/IMG_6025.jpg
 ```
 
 ## Free Tier

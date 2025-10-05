@@ -24,8 +24,40 @@ export const setupGameWebSocketHandlers = (
 ): void => {
   wsManager.on("message", (clientId, data, ws) => {
     try {
-      const message: GameWebSocketEvent = JSON.parse(data);
+      // Validate WebSocket connection is still open
+      if (ws.readyState !== ws.OPEN) {
+        console.warn(`WebSocket connection closed for client ${clientId}`);
+        return;
+      }
 
+      // Validate message data
+      if (!data || typeof data !== "string") {
+        console.warn(`Invalid message data from client ${clientId}:`, data);
+        sendError(ws, "Invalid message format");
+        return;
+      }
+
+      // Parse message with error handling
+      let message: GameWebSocketEvent;
+      try {
+        message = JSON.parse(data);
+      } catch (parseError) {
+        console.warn(`JSON parse error from client ${clientId}:`, parseError);
+        sendError(ws, "Invalid JSON format");
+        return;
+      }
+
+      // Validate message structure
+      if (!message || typeof message !== "object" || !message.type) {
+        console.warn(
+          `Invalid message structure from client ${clientId}:`,
+          message
+        );
+        sendError(ws, "Invalid message structure");
+        return;
+      }
+
+      // Route message to appropriate handler
       switch (message.type) {
         case "player:connect":
           handlePlayerConnect(message.data, ws, wsManager);
@@ -36,42 +68,52 @@ export const setupGameWebSocketHandlers = (
           break;
 
         case "shot:attempt":
-          // Handle shot attempt
-          // Simplified flow: process image → get targetId → save & broadcast
+          // Handle shot attempt with proper error handling
           handleShotAttempt(message.data, ws, wsManager).catch((error) => {
             console.error("Error in shot attempt handler:", error);
-            ws.send(
-              JSON.stringify({
-                type: "error",
-                data: {
-                  message:
-                    error instanceof Error
-                      ? error.message
-                      : "Shot processing failed",
-                },
-              })
-            );
+            sendError(ws, "Shot processing failed");
           });
+          break;
+
+        case "admin:action":
+          // TODO: Implement admin action handler
+          console.log("Admin action received:", message.data);
+          sendError(ws, "Admin actions not yet implemented");
           break;
 
         default:
           console.warn(
-            `Unknown WebSocket event type: ${(message as any).type}`
+            `Unknown WebSocket event type: ${
+              (message as any).type
+            } from client ${clientId}`
           );
+          sendError(ws, `Unknown event type: ${(message as any).type}`);
       }
     } catch (error) {
-      console.error("Error parsing WebSocket message:", error);
-      ws.send(
-        JSON.stringify({
-          type: "error",
-          data: {
-            message: "Invalid message format",
-          },
-        })
-      );
+      console.error("Unexpected error in WebSocket handler:", error);
+      sendError(ws, "Internal server error");
     }
   });
 };
+
+/**
+ * Send error message to WebSocket client
+ */
+function sendError(ws: WebSocket, message: string): void {
+  try {
+    if (ws.readyState === ws.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          data: { message },
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }
+  } catch (error) {
+    console.error("Error sending error message to WebSocket:", error);
+  }
+}
 
 /**
  * Handle player:connect event
