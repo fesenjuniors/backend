@@ -46,6 +46,7 @@ class MatchManager {
       // Create admin player
       const adminPlayer: Player = {
         id: adminId,
+        isActive: true,
         name: adminName.trim(),
         qrCode: "",
         qrCodeBase64: "",
@@ -164,6 +165,7 @@ class MatchManager {
 
       const player: Player = {
         id: playerId,
+        isActive: true,
         name: playerName.trim(),
         qrCode: qrData.json,
         qrCodeBase64: qrData.base64,
@@ -391,6 +393,8 @@ class MatchManager {
         playerName: player.name,
         score: player.score,
         shots: player.shots,
+        rank: 0,
+        hits: 0,
       }))
       .sort((a, b) => b.score - a.score);
 

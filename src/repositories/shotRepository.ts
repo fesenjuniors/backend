@@ -91,11 +91,12 @@ export class ShotRepository {
   /**
    * Get shot logs for a specific player (as shooter)
    */
-  async getPlayerShotLogs(matchId: string, playerId: string): Promise<ShotLog[]> {
+  async getPlayerShotLogs(
+    matchId: string,
+    playerId: string
+  ): Promise<ShotLog[]> {
     if (!isFirebaseAvailable()) {
-      console.log(
-        `[DEV] Would fetch shot logs for player ${playerId}`
-      );
+      console.log(`[DEV] Would fetch shot logs for player ${playerId}`);
       return [];
     }
 

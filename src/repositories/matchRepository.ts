@@ -72,9 +72,7 @@ export class MatchRepository {
    */
   async savePlayer(matchId: string, player: Player): Promise<void> {
     if (!isFirebaseAvailable()) {
-      console.log(
-        `[DEV] Would save player ${player.id} to match ${matchId}`
-      );
+      console.log(`[DEV] Would save player ${player.id} to match ${matchId}`);
       return;
     }
 
@@ -113,9 +111,7 @@ export class MatchRepository {
     state: string
   ): Promise<void> {
     if (!isFirebaseAvailable()) {
-      console.log(
-        `[DEV] Would update player ${playerId} state to ${state}`
-      );
+      console.log(`[DEV] Would update player ${playerId} state to ${state}`);
       return;
     }
 
@@ -145,9 +141,7 @@ export class MatchRepository {
     shots: number
   ): Promise<void> {
     if (!isFirebaseAvailable()) {
-      console.log(
-        `[DEV] Would update player ${playerId} score to ${score}`
-      );
+      console.log(`[DEV] Would update player ${playerId} score to ${score}`);
       return;
     }
 

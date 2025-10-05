@@ -14,6 +14,7 @@ export interface Player {
   state: PlayerState;
   role: PlayerRole;
   joinedAt: Date;
+  isActive: boolean; // Whether player is currently active in the match
 }
 
 export interface Match {
@@ -32,6 +33,21 @@ export interface LeaderboardEntry {
   playerName: string;
   score: number;
   shots: number;
+  rank: number;
+  hits: number;
+}
+
+// Shot data structure for database storage
+export interface Shot {
+  id: string;
+  matchId: string;
+  playerId: string;
+  targetPlayerId: string;
+  timestamp: Date;
+  imageUrl?: string;
+  isHit: boolean;
+  points: number;
+  processedAt?: Date;
 }
 
 // WebSocket Event Payloads

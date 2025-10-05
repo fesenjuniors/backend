@@ -5,6 +5,25 @@ loadEnv();
 export interface AppConfig {
   port: number;
   host: string;
+  nodeEnv: string;
+  firebase: {
+    projectId: string | undefined;
+    clientEmail: string | undefined;
+    privateKey: string | undefined;
+    credentialsPath: string | undefined;
+  };
+  game: {
+    maxPlayersPerMatch: number;
+    matchTimeoutMinutes: number;
+  };
+  qrCode: {
+    size: number;
+    errorCorrectionLevel: string;
+  };
+  imageProcessing: {
+    maxSizeMB: number;
+    allowedTypes: string[];
+  };
 }
 
 const parseNumber = (value: string | undefined, fallback: number): number => {
@@ -16,9 +35,40 @@ const parseNumber = (value: string | undefined, fallback: number): number => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const parseArray = (
+  value: string | undefined,
+  fallback: string[]
+): string[] => {
+  if (!value) {
+    return fallback;
+  }
+  return value.split(",").map((item) => item.trim());
+};
+
 export const config: AppConfig = {
   port: parseNumber(process.env.PORT, 8080),
   host: process.env.HOST ?? "0.0.0.0",
+  nodeEnv: process.env.NODE_ENV ?? "development",
+  firebase: {
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY,
+    credentialsPath: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  },
+  game: {
+    maxPlayersPerMatch: parseNumber(process.env.MAX_PLAYERS_PER_MATCH, 10),
+    matchTimeoutMinutes: parseNumber(process.env.MATCH_TIMEOUT_MINUTES, 30),
+  },
+  qrCode: {
+    size: parseNumber(process.env.QR_CODE_SIZE, 200),
+    errorCorrectionLevel: process.env.QR_CODE_ERROR_CORRECTION_LEVEL ?? "M",
+  },
+  imageProcessing: {
+    maxSizeMB: parseNumber(process.env.MAX_IMAGE_SIZE_MB, 10),
+    allowedTypes: parseArray(process.env.ALLOWED_IMAGE_TYPES, [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ]),
+  },
 };
-
-
