@@ -492,9 +492,15 @@ class MatchManager {
       );
 
       // Check if player has reached the score threshold to win
+      console.log(
+        `🔍 Score check: ${newScore} >= ${match.scoreThreshold}? ${
+          newScore >= match.scoreThreshold
+        }`
+      );
+
       if (newScore >= match.scoreThreshold) {
         console.log(
-          `🎉 Player ${playerId} has reached the score threshold of ${match.scoreThreshold}!`
+          `🎉 Player ${playerId} (${player.name}) has reached the score threshold of ${match.scoreThreshold}! Current score: ${newScore}`
         );
 
         // Get winner info before ending match
@@ -502,15 +508,13 @@ class MatchManager {
         const winnerName = winner?.name || "Unknown Player";
 
         // End the match first
-        await this.endMatch(matchId, match.adminId);
-
-        // Broadcast win/lose events to all players
-        await this.broadcastGameEndEvents(
-          matchId,
-          playerId,
-          winnerName,
-          newScore
+        const matchEnded = this.endMatch(matchId, match.adminId);
+        console.log(
+          `🏁 Match end result: ${matchEnded}, Match state is now: ${match.state}`
         );
+
+        // Log the win condition - WebSocket events will be handled by the calling function
+        console.log(`🏆 Game Over! Winner: ${winnerName} (${newScore} points)`);
 
         return true;
       }
@@ -814,47 +818,6 @@ class MatchManager {
     } catch (error) {
       console.error("Error rejoining player:", error);
       return null;
-    }
-  }
-
-  /**
-   * Broadcast game end events to all players
-   */
-  private async broadcastGameEndEvents(
-    matchId: string,
-    winnerId: string,
-    winnerName: string,
-    finalScore: number
-  ): Promise<void> {
-    try {
-      // Get all players in the match
-      const players = await this.getPlayers(matchId);
-
-      // Import WebSocketManager dynamically to avoid circular dependency
-      const { createWebSocketManager } = await import("../server/websocket");
-
-      // Create a temporary WebSocket manager for broadcasting
-      // Note: This is a simplified approach - in production you'd want to pass the wsManager instance
-      console.log(`🏆 Game Over! Winner: ${winnerName} (${finalScore} points)`);
-
-      // Log the game end for all players
-      players.forEach((player) => {
-        if (player.id === winnerId) {
-          console.log(`🎉 ${player.name} WON the game!`);
-        } else {
-          console.log(`😔 ${player.name} lost the game`);
-        }
-      });
-
-      // TODO: In a real implementation, you'd broadcast WebSocket events here
-      // For now, we'll log the events that should be sent
-      console.log(
-        `📡 Should broadcast 'game:ended' event to all players in match ${matchId}`
-      );
-      console.log(`📡 Should send 'player:won' to winner ${winnerId}`);
-      console.log(`📡 Should send 'player:lost' to all other players`);
-    } catch (error) {
-      console.error("Error broadcasting game end events:", error);
     }
   }
 }

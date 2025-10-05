@@ -156,7 +156,7 @@ router.post("/api/match/:matchId/start", (req: Request, res: Response) => {
   // Broadcast match started event
   const payload: MatchStartedPayload = {
     matchId,
-    startedAt: match.startedAt!.toISOString(),
+    startedAt: match.startedAt?.toISOString() || new Date().toISOString(),
   };
 
   websocketManager.broadcast(

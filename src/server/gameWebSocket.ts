@@ -337,6 +337,9 @@ async function handleShotAttempt(
     if (targetId) {
       console.log(`Shot processed. Target ID: ${targetId}`);
       await broadcastResult(matchId, shooterId, targetId, wsManager);
+
+      // Check if game has ended due to win condition (for QR shots)
+      await checkAndBroadcastGameEnd(matchId, shooterId, wsManager);
       return;
     }
 
@@ -718,10 +721,18 @@ async function checkAndBroadcastGameEnd(
 ): Promise<void> {
   try {
     const match = matchManager.getMatch(matchId);
-    if (!match) return;
+    if (!match) {
+      console.log(`❌ Match ${matchId} not found for game end check`);
+      return;
+    }
+
+    console.log(
+      `🔍 Checking game end for match ${matchId}, state: ${match.state}`
+    );
 
     // Check if match has ended (state would be "ended" if someone won)
     if (match.state === "ended") {
+      console.log(`🎯 Match ${matchId} has ended, broadcasting win events...`);
       const winner = await matchManager.getPlayer(matchId, playerId);
       const winnerName = winner?.name || "Unknown Player";
       const finalScore = winner?.score || 0;
@@ -743,9 +754,16 @@ async function checkAndBroadcastGameEnd(
         },
       };
 
+      console.log(
+        `📡 Broadcasting game:ended event:`,
+        JSON.stringify(gameEndedEvent, null, 2)
+      );
       wsManager.broadcast(JSON.stringify(gameEndedEvent));
 
       // Send individual win/lose events to each player
+      console.log(
+        `📡 Broadcasting individual win/lose events to ${players.length} players...`
+      );
       for (const player of players) {
         if (player.id === playerId) {
           // Winner event
@@ -755,10 +773,14 @@ async function checkAndBroadcastGameEnd(
               matchId,
               playerId: player.id,
               playerName: player.name,
-              finalScore: player.score,
-              message: `🏆 Congratulations! You won the game with ${player.score} points!`,
+              finalScore: finalScore, // Use the actual final score that triggered the win
+              message: `🏆 Congratulations! You won the game with ${finalScore} points!`,
             },
           };
+          console.log(
+            `📡 Broadcasting player:won to ${player.name}:`,
+            JSON.stringify(winEvent, null, 2)
+          );
           wsManager.broadcast(JSON.stringify(winEvent));
         } else {
           // Loser event
@@ -774,12 +796,25 @@ async function checkAndBroadcastGameEnd(
               message: `😔 Game over! ${winnerName} won with ${finalScore} points. You scored ${player.score} points.`,
             },
           };
+          console.log(
+            `📡 Broadcasting player:lost to ${player.name}:`,
+            JSON.stringify(loseEvent, null, 2)
+          );
           wsManager.broadcast(JSON.stringify(loseEvent));
         }
       }
 
       console.log(
-        `🎉 Game ended! Winner: ${winnerName} (${finalScore} points)`
+        `✅ All game end events broadcasted! Winner: ${winnerName} (${finalScore} points)`
+      );
+      console.log(
+        `📊 Events sent: game:ended (all), player:won (winner), player:lost (${
+          players.length - 1
+        } losers)`
+      );
+    } else {
+      console.log(
+        `ℹ️ Match ${matchId} is still active (state: ${match.state}), no win events to broadcast`
       );
     }
   } catch (error) {
