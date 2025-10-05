@@ -255,6 +255,155 @@ export class MatchRepository {
       throw error;
     }
   }
+
+  /**
+   * Load all matches from database
+   */
+  async loadAllMatches(): Promise<Match[]> {
+    if (!isFirebaseAvailable()) {
+      console.log("[DEV] Would load all matches from Firebase");
+      return [];
+    }
+
+    try {
+      const db = getDb();
+      const matchesSnapshot = await db.collection(this.COLLECTION).get();
+      const matches: Match[] = [];
+
+      for (const matchDoc of matchesSnapshot.docs) {
+        const matchData = matchDoc.data();
+        const matchId = matchDoc.id;
+
+        // Load players for this match
+        const playersSnapshot = await db
+          .collection(this.COLLECTION)
+          .doc(matchId)
+          .collection("players")
+          .get();
+
+        const players = new Map<string, Player>();
+        for (const playerDoc of playersSnapshot.docs) {
+          const playerData = playerDoc.data();
+          const player: Player = {
+            id: playerData.id,
+            name: playerData.name,
+            role: playerData.role,
+            qrCode: playerData.qrCode,
+            qrCodeBase64: playerData.qrCodeBase64,
+            score: playerData.score,
+            shots: playerData.shots,
+            state: playerData.state,
+            joinedAt: playerData.joinedAt
+              ? playerData.joinedAt.toDate()
+              : new Date(),
+            isActive: playerData.isActive,
+            inventory: playerData.inventory || [],
+            scoreHistory: playerData.scoreHistory || [],
+          };
+          players.set(playerData.id, player);
+        }
+
+        const match: Match = {
+          id: matchId,
+          state: matchData.state,
+          players,
+          adminId: matchData.adminId,
+          createdAt: matchData.createdAt
+            ? matchData.createdAt.toDate()
+            : new Date(),
+          startedAt: matchData.startedAt
+            ? matchData.startedAt.toDate()
+            : undefined,
+          pausedAt: matchData.pausedAt
+            ? matchData.pausedAt.toDate()
+            : undefined,
+          endedAt: matchData.endedAt ? matchData.endedAt.toDate() : undefined,
+        };
+
+        matches.push(match);
+      }
+
+      console.log(`Loaded ${matches.length} matches from Firebase`);
+      return matches;
+    } catch (error) {
+      console.error("Error loading matches from Firebase:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Load a specific match by ID
+   */
+  async loadMatch(matchId: string): Promise<Match | null> {
+    if (!isFirebaseAvailable()) {
+      console.log(`[DEV] Would load match ${matchId} from Firebase`);
+      return null;
+    }
+
+    try {
+      const db = getDb();
+      const matchDoc = await db.collection(this.COLLECTION).doc(matchId).get();
+
+      if (!matchDoc.exists) {
+        return null;
+      }
+
+      const matchData = matchDoc.data();
+      if (!matchData) {
+        return null;
+      }
+
+      // Load players for this match
+      const playersSnapshot = await db
+        .collection(this.COLLECTION)
+        .doc(matchId)
+        .collection("players")
+        .get();
+
+      const players = new Map<string, Player>();
+      for (const playerDoc of playersSnapshot.docs) {
+        const playerData = playerDoc.data();
+        const player: Player = {
+          id: playerData.id,
+          name: playerData.name,
+          role: playerData.role,
+          qrCode: playerData.qrCode,
+          qrCodeBase64: playerData.qrCodeBase64,
+          score: playerData.score,
+          shots: playerData.shots,
+          state: playerData.state,
+          joinedAt: playerData.joinedAt
+            ? playerData.joinedAt.toDate()
+            : new Date(),
+          isActive: playerData.isActive,
+          inventory: playerData.inventory || [],
+          scoreHistory: playerData.scoreHistory || [],
+        };
+        players.set(playerData.id, player);
+      }
+
+      const match: Match = {
+        id: matchId,
+        state: matchData.state,
+        players,
+        adminId: matchData.adminId,
+        createdAt: matchData.createdAt
+          ? matchData.createdAt.toDate()
+          : new Date(),
+        startedAt: matchData.startedAt
+          ? matchData.startedAt.toDate()
+          : undefined,
+        pausedAt: matchData.pausedAt ? matchData.pausedAt.toDate() : undefined,
+        endedAt: matchData.endedAt ? matchData.endedAt.toDate() : undefined,
+      };
+
+      console.log(`Loaded match ${matchId} from Firebase`);
+      return match;
+    } catch (error) {
+      console.error("Error loading match from Firebase:", error);
+      throw error;
+    }
+  }
 }
 
 // Singleton instance

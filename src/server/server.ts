@@ -8,6 +8,7 @@ import { createWebSocketManager } from "./websocket";
 import { setupGameWebSocketHandlers } from "./gameWebSocket";
 import { errorHandler, validateRequest } from "../middleware/errorHandler";
 import { loadCertificates } from "../utils/certificateGenerator";
+import { matchManager } from "../services/matchManager";
 
 // Initialize Firebase
 initializeFirebase();
@@ -19,7 +20,7 @@ app.use((req, res, next) => {
   // Allow requests from Vite frontend (adjust origins as needed)
   const allowedOrigins = [
     "http://localhost:5175",
-    "https://localhost:5175", 
+    "https://localhost:5175",
     "http://localhost:8175",
     "https://localhost:8175",
     "http://127.0.0.1:5175",
@@ -27,33 +28,36 @@ app.use((req, res, next) => {
     "https://127.0.0.1:8175",
     "http://127.0.0.1:8175",
 
-
-
-
-    "*" // Allow all origins in development
+    "*", // Allow all origins in development
   ];
-  
+
   const origin = req.headers.origin;
-  if (origin && (allowedOrigins.includes("*") || allowedOrigins.includes(origin))) {
+  if (
+    origin &&
+    (allowedOrigins.includes("*") || allowedOrigins.includes(origin))
+  ) {
     res.header("Access-Control-Allow-Origin", origin);
   } else if (allowedOrigins.includes("*")) {
     res.header("Access-Control-Allow-Origin", "*");
   }
-  
+
   // Allow specific methods
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  
+
   // Allow specific headers
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-  
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
+
   // Allow credentials
   res.header("Access-Control-Allow-Credentials", "true");
-  
+
   // Handle preflight requests
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
   }
-  
+
   next();
 });
 
@@ -82,14 +86,17 @@ if (config.https.enabled) {
     if (config.https.keyPath) {
       certificateOptions.keyPath = config.https.keyPath;
     }
-    
+
     const certificates = loadCertificates(certificateOptions);
-    
-    httpsServer = https.createServer({
-      cert: certificates.cert,
-      key: certificates.key,
-    }, app);
-    
+
+    httpsServer = https.createServer(
+      {
+        cert: certificates.cert,
+        key: certificates.key,
+      },
+      app
+    );
+
     console.log("HTTPS server created with self-signed certificates");
   } catch (error) {
     console.error("Failed to create HTTPS server:", error);
@@ -109,13 +116,18 @@ export const websocketManager = createWebSocketManager({
 setupGameWebSocketHandlers(websocketManager);
 
 // Start HTTP server
-httpServer.listen(config.port, config.host, () => {
+httpServer.listen(config.port, config.host, async () => {
   const address = httpServer.address();
   if (address && typeof address !== "string") {
     const baseUrl = `http://${address.address}:${address.port}`;
     console.log(`\n🚀 HTTP Server listening on ${baseUrl}`);
-    console.log(`   WebSocket endpoint: ws://${address.address}:${address.port}/ws`);
+    console.log(
+      `   WebSocket endpoint: ws://${address.address}:${address.port}/ws`
+    );
   }
+
+  // Load matches from database on startup
+  await matchManager.loadMatchesFromDatabase();
 });
 
 // Start HTTPS server if enabled
@@ -125,8 +137,12 @@ if (httpsServer) {
     if (address && typeof address !== "string") {
       const baseUrl = `https://${address.address}:${address.port}`;
       console.log(`\n🔒 HTTPS Server listening on ${baseUrl}`);
-      console.log(`   Secure WebSocket endpoint: wss://${address.address}:${address.port}/ws`);
-      console.log(`\n⚠️  Note: Using self-signed certificates. Your browser will show a security warning.`);
+      console.log(
+        `   Secure WebSocket endpoint: wss://${address.address}:${address.port}/ws`
+      );
+      console.log(
+        `\n⚠️  Note: Using self-signed certificates. Your browser will show a security warning.`
+      );
       console.log(`   Accept the certificate to continue.\n`);
     }
   });

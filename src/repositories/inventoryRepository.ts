@@ -197,28 +197,58 @@ export class InventoryRepository {
   }
 
   /**
-   * Update player's total score
+   * Update player's total score and shots
    */
   async updatePlayerScore(
     matchId: string,
     playerId: string,
-    newScore: number
+    newScore: number,
+    shots?: number
   ): Promise<void> {
     if (!isFirebaseAvailable()) {
-      console.log(`[DEV] Would update player ${playerId} score to ${newScore}`);
+      console.log(
+        `[DEV] Would update player ${playerId} score to ${newScore}, shots: ${
+          shots || "not provided"
+        }`
+      );
       return;
     }
 
     try {
       const db = getDb();
+      const updateData: any = { score: newScore };
+
+      if (shots !== undefined) {
+        updateData.shots = shots;
+      }
+
       await db
         .collection("matches")
         .doc(matchId)
         .collection("players")
         .doc(playerId)
-        .update({ score: newScore });
+        .update(updateData);
 
-      console.log(`Player ${playerId} score updated to ${newScore}`);
+      console.log(
+        `Player ${playerId} score updated to ${newScore}${
+          shots !== undefined ? `, shots: ${shots}` : ""
+        } - Database update completed`
+      );
+
+      // Verify the update by reading the document back
+      const doc = await db
+        .collection("matches")
+        .doc(matchId)
+        .collection("players")
+        .doc(playerId)
+        .get();
+
+      if (doc.exists) {
+        const data = doc.data();
+        console.log(
+          `Verification: Player ${playerId} in database - score: ${data?.score}, shots: ${data?.shots}`
+        );
+      }
     } catch (error) {
       console.error("Error updating player score:", error);
       throw error;

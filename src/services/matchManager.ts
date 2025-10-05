@@ -434,21 +434,32 @@ class MatchManager {
   ): boolean {
     const match = this.matches.get(matchId);
     if (!match) {
+      console.log(`Match ${matchId} not found in memory for score update`);
       return false;
     }
 
     const player = match.players.get(playerId);
     if (!player) {
+      console.log(
+        `Player ${playerId} not found in match ${matchId} for score update`
+      );
       return false;
     }
 
     player.score += pointsToAdd;
     player.shots += 1;
-    console.log(`Player ${playerId} score updated: ${player.score}`);
+    console.log(
+      `Player ${playerId} score updated: ${player.score}, shots: ${player.shots}`
+    );
 
     // Update Firebase
     matchRepository
       .updatePlayerScore(matchId, playerId, player.score, player.shots)
+      .then(() => {
+        console.log(
+          `Player ${playerId} score saved to Firebase: ${player.score}, shots: ${player.shots}`
+        );
+      })
       .catch((err) => {
         console.error("Failed to update player score in Firebase:", err);
       });
@@ -614,6 +625,113 @@ class MatchManager {
     } catch (error) {
       console.error("Invalid QR code data:", error);
       return { valid: false };
+    }
+  }
+
+  /**
+   * Load all matches from database on startup
+   */
+  async loadMatchesFromDatabase(): Promise<void> {
+    try {
+      console.log("🔄 Loading matches from database...");
+      const matches = await matchRepository.loadAllMatches();
+
+      for (const match of matches) {
+        this.matches.set(match.id, match);
+        console.log(
+          `✅ Loaded match ${match.id} with ${match.players.size} players`
+        );
+      }
+
+      console.log(`✅ Loaded ${matches.length} matches from database`);
+    } catch (error) {
+      console.error("❌ Failed to load matches from database:", error);
+      // Don't throw - allow server to start even if database loading fails
+    }
+  }
+
+  /**
+   * Load a specific match from database
+   */
+  async loadMatchFromDatabase(matchId: string): Promise<Match | null> {
+    try {
+      const match = await matchRepository.loadMatch(matchId);
+      if (match) {
+        this.matches.set(match.id, match);
+        console.log(`✅ Loaded match ${matchId} from database`);
+      }
+      return match;
+    } catch (error) {
+      console.error(`❌ Failed to load match ${matchId} from database:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Rejoin an existing player to a match
+   */
+  async rejoinPlayer(
+    matchId: string,
+    playerName: string
+  ): Promise<Player | null> {
+    try {
+      // First, try to load the match from database if not in memory
+      let match = this.matches.get(matchId);
+      if (!match) {
+        console.log(`Match ${matchId} not in memory, loading from database...`);
+        const loadedMatch = await this.loadMatchFromDatabase(matchId);
+        if (!loadedMatch) {
+          console.log(`Match ${matchId} not found in database`);
+          return null;
+        }
+        match = loadedMatch;
+        // Store the loaded match in memory
+        this.matches.set(matchId, match);
+        console.log(
+          `Match ${matchId} loaded from database and stored in memory`
+        );
+      }
+
+      // Find existing player by name
+      const existingPlayer = Array.from(match.players.values()).find(
+        (p) => p.name.toLowerCase() === playerName.trim().toLowerCase()
+      );
+
+      if (!existingPlayer) {
+        console.log(`Player "${playerName}" not found in match ${matchId}`);
+        return null;
+      }
+
+      // Load fresh player data from database to get latest inventory and scores
+      const freshPlayerData = await matchRepository.loadMatch(matchId);
+      if (freshPlayerData) {
+        const freshPlayer = freshPlayerData.players.get(existingPlayer.id);
+        if (freshPlayer) {
+          // Update the existing player with fresh data
+          existingPlayer.inventory = freshPlayer.inventory;
+          existingPlayer.scoreHistory = freshPlayer.scoreHistory;
+          existingPlayer.score = freshPlayer.score;
+          existingPlayer.shots = freshPlayer.shots;
+          console.log(
+            `Loaded fresh player data: score=${freshPlayer.score}, shots=${freshPlayer.shots}`
+          );
+        }
+      }
+
+      // Update player state to connected
+      existingPlayer.state = "connected";
+      existingPlayer.isActive = true;
+
+      // Save updated player state to database
+      await matchRepository.savePlayer(matchId, existingPlayer);
+
+      console.log(
+        `Player ${existingPlayer.id} (${playerName}) rejoined match ${matchId}`
+      );
+      return existingPlayer;
+    } catch (error) {
+      console.error("Error rejoining player:", error);
+      return null;
     }
   }
 }
