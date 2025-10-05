@@ -4,6 +4,46 @@ export type MatchState = "waiting" | "active" | "paused" | "ended";
 export type PlayerState = "connected" | "disconnected" | "eliminated";
 export type PlayerRole = "player" | "admin";
 
+// Score and Inventory Types
+export type ScoreType =
+  | "shot_hit"
+  | "item_dropoff"
+  | "bonus"
+  | "penalty"
+  | "achievement";
+export type ItemType =
+  | "plastic_bottle"
+  | "can"
+  | "paper"
+  | "glass"
+  | "organic"
+  | "metal"
+  | "cardboard"
+  | "other";
+
+export interface ScoreEntry {
+  id: string;
+  type: ScoreType;
+  points: number;
+  description: string;
+  timestamp: Date;
+  metadata?: Record<string, any>; // For additional data like item type, location, etc.
+}
+
+export interface InventoryItem {
+  id: string;
+  type: ItemType;
+  name: string;
+  description: string;
+  value: number; // Points when dropped off
+  pickedUpAt: Date;
+  location?: {
+    lat: number;
+    lng: number;
+  };
+  metadata?: Record<string, any>;
+}
+
 export interface Player {
   id: string;
   name: string;
@@ -15,6 +55,8 @@ export interface Player {
   role: PlayerRole;
   joinedAt: Date;
   isActive: boolean; // Whether player is currently active in the match
+  inventory: InventoryItem[]; // Player's collected items
+  scoreHistory: ScoreEntry[]; // History of all score changes
 }
 
 export interface Match {
@@ -60,6 +102,30 @@ export interface PlayerConnectPayload {
 export interface PlayerDisconnectPayload {
   matchId: string;
   playerId: string;
+}
+
+// Inventory Events
+export interface ItemPickedUpPayload {
+  matchId: string;
+  playerId: string;
+  item: InventoryItem;
+  timestamp: string;
+}
+
+export interface ItemDroppedOffPayload {
+  matchId: string;
+  playerId: string;
+  item: InventoryItem;
+  pointsEarned: number;
+  timestamp: string;
+}
+
+export interface ScoreUpdatePayload {
+  matchId: string;
+  playerId: string;
+  scoreEntry: ScoreEntry;
+  newTotalScore: number;
+  timestamp: string;
 }
 
 // Shot attempt from frontend - simplified
@@ -172,7 +238,9 @@ export type GameWebSocketEvent =
   | { type: "player:connect"; data: PlayerConnectPayload }
   | { type: "player:disconnect"; data: PlayerDisconnectPayload }
   | { type: "shot:attempt"; data: ShotAttemptPayload }
-  | { type: "admin:action"; data: MatchAdminAction };
+  | { type: "admin:action"; data: MatchAdminAction }
+  | { type: "item:pickup"; data: ItemPickedUpPayload }
+  | { type: "item:dropoff"; data: ItemDroppedOffPayload };
 
 export type GameWebSocketBroadcast =
   | { type: "match:state"; data: MatchStatePayload }
@@ -183,4 +251,7 @@ export type GameWebSocketBroadcast =
   | { type: "match:started"; data: MatchStartedPayload }
   | { type: "match:paused"; data: MatchPausedPayload }
   | { type: "match:resumed"; data: MatchResumedPayload }
-  | { type: "match:ended"; data: MatchEndedPayload };
+  | { type: "match:ended"; data: MatchEndedPayload }
+  | { type: "item:picked_up"; data: ItemPickedUpPayload }
+  | { type: "item:dropped_off"; data: ItemDroppedOffPayload }
+  | { type: "score:update"; data: ScoreUpdatePayload };
