@@ -1,0 +1,204 @@
+{
+  "title": "WebSocket Events Guide for Frontend Development",
+  "description": "Complete guide for handling new WebSocket events related to garbage recycling and item redemption",
+  "version": "1.0.0",
+  "lastUpdated": "2025-01-04",
+
+  "newWebSocketEvents": {
+    "item_redeemed": {
+      "description": "Fired when a player successfully recycles an item from their inventory into a matching bin",
+      "trigger": "When garbage detection finds matching bins and recycles items",
+      "eventStructure": {
+        "type": "item_redeemed",
+        "data": {
+          "matchId": "string - ID of the current match",
+          "playerId": "string - ID of the player who redeemed the item",
+          "item": {
+            "name": "string - Name of the recycled item (e.g., 'plastic bottle')",
+            "type": "string - Garbage type (e.g., 'Recyclable', 'Food scraps')",
+            "co2Savings": "number - CO₂ savings in kg (e.g., 0.5)",
+            "pointsEarned": "number - Points earned (minimum 15, or CO₂ * 50)"
+          },
+          "message": "string - Human-readable message for display"
+        }
+      },
+      "example": {
+        "type": "item_redeemed",
+        "data": {
+          "matchId": "match_123",
+          "playerId": "player_456",
+          "item": {
+            "name": "plastic water bottle",
+            "type": "Recyclable",
+            "co2Savings": 0.5,
+            "pointsEarned": 25
+          },
+          "message": "♻️ Recycled plastic water bottle - CO₂ saved: 0.5kg (25 points)"
+        }
+      },
+      "frontendHandling": {
+        "display": "Show success animation with item name and points earned",
+        "notifications": "Display toast/notification with the message",
+        "inventory": "Remove the item from player's inventory UI",
+        "score": "Update player's score display",
+        "leaderboard": "Trigger leaderboard update if needed"
+      }
+    },
+
+    "items_collected": {
+      "description": "Fired when a player collects garbage items but no matching bins are available",
+      "trigger": "When garbage detection finds items but no compatible bins",
+      "eventStructure": {
+        "type": "items_collected",
+        "data": {
+          "matchId": "string - ID of the current match",
+          "playerId": "string - ID of the player who collected items",
+          "items": [
+            {
+              "name": "string - Name of the collected item",
+              "type": "string - Garbage type",
+              "co2Savings": "number - CO₂ savings in kg"
+            }
+          ],
+          "pointsEarned": "number - Total points earned (20 per item)",
+          "message": "string - Human-readable message for display"
+        }
+      },
+      "example": {
+        "type": "items_collected",
+        "data": {
+          "matchId": "match_123",
+          "playerId": "player_456",
+          "items": [
+            {
+              "name": "food scraps",
+              "type": "Food scraps",
+              "co2Savings": 0.2
+            },
+            {
+              "name": "paper cup",
+              "type": "Mixed Paper",
+              "co2Savings": 0.1
+            }
+          ],
+          "pointsEarned": 40,
+          "message": "📦 Collected 2 item(s) - 40 points earned"
+        }
+      },
+      "frontendHandling": {
+        "display": "Show collection animation with items collected",
+        "notifications": "Display toast/notification with the message",
+        "inventory": "Add items to player's inventory UI",
+        "score": "Update player's score display",
+        "leaderboard": "Trigger leaderboard update if needed"
+      }
+    }
+  },
+
+  "scoringSystem": {
+    "recycledItems": {
+      "minimumPoints": 15,
+      "calculation": "Math.max(15, co2Savings * 50)",
+      "description": "Items recycled into matching bins get minimum 15 points or CO₂ * 50, whichever is higher"
+    },
+    "collectedItems": {
+      "pointsPerItem": 20,
+      "description": "Items collected without matching bins get 20 points each"
+    }
+  },
+
+  "frontendImplementation": {
+    "websocketHandler": {
+      "code": `
+// Add these event handlers to your WebSocket message handler
+function handleWebSocketMessage(event) {
+  const data = JSON.parse(event.data);
+  
+  switch(data.type) {
+    case 'item_redeemed':
+      handleItemRedeemed(data.data);
+      break;
+    case 'items_collected':
+      handleItemsCollected(data.data);
+      break;
+    // ... other existing handlers
+  }
+}
+
+function handleItemRedeemed(data) {
+  // Show success animation
+  showRecyclingAnimation(data.item.name, data.item.pointsEarned);
+  
+  // Update UI
+  updatePlayerScore(data.playerId, data.item.pointsEarned);
+  removeItemFromInventory(data.item);
+  
+  // Show notification
+  showNotification(data.message, 'success');
+  
+  // Update leaderboard if needed
+  updateLeaderboard();
+}
+
+function handleItemsCollected(data) {
+  // Show collection animation
+  showCollectionAnimation(data.items.length, data.pointsEarned);
+  
+  // Update UI
+  updatePlayerScore(data.playerId, data.pointsEarned);
+  addItemsToInventory(data.items);
+  
+  // Show notification
+  showNotification(data.message, 'info');
+  
+  // Update leaderboard if needed
+  updateLeaderboard();
+}
+      `
+    },
+
+    "uiComponents": {
+      "recyclingAnimation": "Show checkmark + recycling symbol + points earned",
+      "collectionAnimation": "Show plus symbol + items count + points earned",
+      "notifications": "Toast messages with item details and points",
+      "inventoryUpdates": "Real-time inventory add/remove with smooth animations",
+      "scoreDisplay": "Animated score counter showing point increases"
+    },
+
+    "testing": {
+      "testScenarios": [
+        "Scan image with recyclable items and matching bins",
+        "Scan image with items but no matching bins",
+        "Scan image with mixed items (some match, some don't)",
+        "Verify score calculations match backend logic"
+      ],
+      "expectedBehaviors": [
+        "Recycled items: Remove from inventory, show success animation",
+        "Collected items: Add to inventory, show collection animation",
+        "Score updates: Real-time score counter with point animations",
+        "Notifications: Clear feedback for all actions"
+      ]
+    }
+  },
+
+  "breakingChanges": {
+    "description": "New WebSocket events added - no breaking changes to existing functionality",
+    "migration": "Simply add the new event handlers to existing WebSocket message processing",
+    "backwardCompatibility": "All existing events continue to work as before"
+  },
+
+  "examples": {
+    "completeFlow": {
+      "description": "Example of complete user interaction flow",
+      "steps": [
+        "1. Player scans image with garbage and bins",
+        "2. Backend detects items and bins",
+        "3. Backend matches items to bins and recycles them",
+        "4. Backend sends 'item_redeemed' events for each recycled item",
+        "5. Backend sends 'items_collected' event for unmatched items",
+        "6. Frontend shows animations and updates UI",
+        "7. Player sees updated score and inventory"
+      ]
+    }
+  }
+}
