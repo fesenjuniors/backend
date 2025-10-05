@@ -10,16 +10,46 @@ async function testShotHandling() {
   const serverUrl = "ws://localhost:8080/ws";
   const httpUrl = "http://localhost:8080";
 
+  const testResults = [];
+
   console.log("🧪 Testing HIT scenario with hit.jpg...");
-  await runTestScenario("hit.jpg", true); // Real hit image
+  const hitResult = await runTestScenario("hit.jpg", true); // Real hit image
+  testResults.push({ name: "HIT scenario with hit.jpg", ...hitResult });
 
   console.log("\n🧪 Testing MISS scenario with miss.jpg...");
-  await runTestScenario("miss.jpg", false); // Real miss image
+  const missResult = await runTestScenario("miss.jpg", false); // Real miss image
+  testResults.push({ name: "MISS scenario with miss.jpg", ...missResult });
 
-  console.log("\n✅ All tests completed!");
+  // Display test summary
+  console.log("\n📊 Test Results Summary:");
+  console.log("=".repeat(50));
+
+  let passed = 0;
+  let failed = 0;
+
+  testResults.forEach((result, index) => {
+    const status = result.passed ? "✅ PASS" : "❌ FAIL";
+    console.log(`${index + 1}. ${result.name}: ${status}`);
+    if (result.passed) {
+      passed++;
+    } else {
+      failed++;
+      console.log(`   Error: ${result.error}`);
+    }
+  });
+
+  console.log("=".repeat(50));
+  console.log(`Total: ${testResults.length} tests, ${passed} passed, ${failed} failed`);
+
+  if (failed === 0) {
+    console.log("\n🎉 All tests passed!");
+  } else {
+    console.log(`\n⚠️  ${failed} test(s) failed.`);
+    process.exit(1);
+  }
 
   async function runTestScenario(imageFile, shouldHit) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       console.log("Creating test match via HTTP...");
 
       // First create a match
@@ -30,6 +60,8 @@ async function testShotHandling() {
         },
       });
 
+      createMatchRequest.write(JSON.stringify({ adminName: "Test Admin" }));
+
       createMatchRequest.on("response", (res) => {
         let data = "";
         res.on("data", (chunk) => (data += chunk));
@@ -38,24 +70,25 @@ async function testShotHandling() {
             const matchData = JSON.parse(data);
             console.log("Match created:", matchData);
 
-            // Now join a player to the match
-            joinPlayer(
+            // The admin is already the first player, now join a second player
+            joinSecondPlayer(
               matchData.matchId,
+              matchData.adminId,
               imageFile,
               shouldHit,
-              resolve,
-              reject
+              (result) => resolve(result), // Success callback
+              (error) => resolve({ passed: false, error: error.message }) // Error callback
             );
           } catch (error) {
             console.error("Error parsing match creation response:", error);
-            reject(error);
+            resolve({ passed: false, error: error.message });
           }
         });
       });
 
       createMatchRequest.on("error", (error) => {
         console.error("Error creating match:", error);
-        reject(error);
+        resolve({ passed: false, error: error.message });
       });
 
       createMatchRequest.end();
@@ -108,11 +141,11 @@ async function testShotHandling() {
 
   function joinSecondPlayer(
     matchId,
-    firstPlayerId,
+    adminId,
     imageFile,
     shouldHit,
-    resolve,
-    reject
+    onSuccess,
+    onError
   ) {
     console.log("Joining second player to match...");
 
@@ -141,22 +174,22 @@ async function testShotHandling() {
           // Now start the match
           startMatch(
             matchId,
-            firstPlayerId,
+            adminId,
             imageFile,
             shouldHit,
-            resolve,
-            reject
+            onSuccess,
+            onError
           );
         } catch (error) {
           console.error("Error parsing second player join response:", error);
-          reject(error);
+          onError(error);
         }
       });
     });
 
     joinRequest2.on("error", (error) => {
       console.error("Error joining second player:", error);
-      reject(error);
+      onError(error);
     });
 
     joinRequest2.end();
@@ -164,11 +197,11 @@ async function testShotHandling() {
 
   function startMatch(
     matchId,
-    playerId,
+    adminId,
     imageFile,
     shouldHit,
-    resolve,
-    reject
+    onSuccess,
+    onError
   ) {
     console.log("Starting the match...");
 
@@ -178,6 +211,8 @@ async function testShotHandling() {
         "Content-Type": "application/json",
       },
     });
+
+    startRequest.write(JSON.stringify({ adminId }));
 
     startRequest.on("response", (res) => {
       let data = "";
@@ -190,22 +225,22 @@ async function testShotHandling() {
           // Now connect via websocket
           connectAndTest(
             matchId,
-            playerId,
+            adminId,
             imageFile,
             shouldHit,
-            resolve,
-            reject
+            onSuccess,
+            onError
           );
         } catch (error) {
           console.error("Error parsing match start response:", error);
-          reject(error);
+          onError(error);
         }
       });
     });
 
     startRequest.on("error", (error) => {
       console.error("Error starting match:", error);
-      reject(error);
+      onError(error);
     });
 
     startRequest.end();
@@ -216,8 +251,8 @@ async function testShotHandling() {
     playerId,
     imageFile,
     shouldHit,
-    resolve,
-    reject
+    onSuccess,
+    onError
   ) {
     console.log("Connecting to websocket server...");
 
@@ -279,28 +314,30 @@ async function testShotHandling() {
           console.log(
             `✅ ${shouldHit ? "Hit" : "Miss"} scenario tested successfully!`
           );
+          ws.close();
+          onSuccess({ passed: true });
         } else {
           console.log(
             `⚠️  Expected ${shouldHit ? "hit" : "miss"} but got ${
               actualHit ? "hit" : "miss"
             }`
           );
+          ws.close();
+          onError(new Error(`Expected ${shouldHit ? "hit" : "miss"} but got ${actualHit ? "hit" : "miss"}`));
         }
-        ws.close();
-        resolve();
       }
 
       // Handle errors
       if (message.type === "error") {
         console.error("❌ Error received:", message.data);
         ws.close();
-        reject(new Error(message.data.message));
+        onError(new Error(message.data.message));
       }
     });
 
     ws.on("error", (error) => {
       console.error("WebSocket error:", error);
-      reject(error);
+      onError(error);
     });
 
     ws.on("close", () => {
@@ -311,10 +348,10 @@ async function testShotHandling() {
     setTimeout(() => {
       console.log("❌ Test timed out");
       ws.close();
-      reject(new Error("Test timed out"));
+      onError(new Error("Test timed out"));
     }, 15000);
   }
 }
 
 // Run the test
-testShotHandling().catch(console.error);
+testShotHandling();
