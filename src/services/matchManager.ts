@@ -136,9 +136,10 @@ class MatchManager {
         return null;
       }
 
-      if (match.state !== "waiting") {
+      // Allow new players to join only in "waiting" or "ended" states
+      if (match.state !== "waiting" && match.state !== "ended") {
         console.error(
-          `Match ${matchId} is not in waiting state (current: ${match.state})`
+          `Match ${matchId} is not in waiting or ended state (current: ${match.state})`
         );
         return null;
       }
@@ -269,7 +270,8 @@ class MatchManager {
       return false;
     }
 
-    if (match.state !== "waiting") {
+    // Allow starting from "waiting" or "ended" states (for restart functionality)
+    if (match.state !== "waiting" && match.state !== "ended") {
       console.error(
         `Match ${matchId} cannot be started from state ${match.state}`
       );

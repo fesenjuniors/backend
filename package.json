@@ -12,6 +12,8 @@
     "test:inventory": "ts-node tests/test-inventory-score.ts",
     "test:persistent": "ts-node tests/test-persistent-matches.ts",
     "test:api-rejoin": "ts-node tests/test-api-rejoin.ts",
+    "test:match-states": "ts-node tests/test-match-states.ts",
+    "test:match-restart": "ts-node tests/test-match-restart.ts",
     "start:https": "HTTPS_ENABLED=true node dist/server/server.js",
     "generate-certs": "ts-node -e \"require('./src/utils/certificateGenerator').generateSelfSignedCertificate()\""
   },
