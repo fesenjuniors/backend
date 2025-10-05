@@ -173,7 +173,7 @@ router.get("/api/match/:matchId/leaderboard", (req: Request, res: Response) => {
  */
 router.post("/api/match/:matchId/join", (req: Request, res: Response) => {
   const matchId = req.params.matchId as string;
-  const { playerName } = req.body;
+  const { playerName, playerId } = req.body;
 
   if (!playerName || typeof playerName !== "string") {
     res.status(400).json({ error: "playerName is required" });
@@ -186,7 +186,7 @@ router.post("/api/match/:matchId/join", (req: Request, res: Response) => {
     return;
   }
 
-  const player = matchManager.addPlayer(matchId, playerName);
+  const player = matchManager.addPlayer(matchId, playerName, playerId);
   if (!player) {
     res
       .status(400)

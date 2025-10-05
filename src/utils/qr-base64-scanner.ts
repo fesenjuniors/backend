@@ -1,4 +1,6 @@
 import fs from "fs";
+import os from "os";
+import path from "path";
 import { scanQRWithZXingAdvanced } from "./qr-scanner-zxing-simple";
 
 /**
@@ -11,9 +13,11 @@ export const scanQRFromBase64 = async (
   base64Image: string,
   outputDir: string = "./debug-images"
 ): Promise<string | null> => {
-  const tempFilePath = "/tmp/temp-qr-scan.png";
+  const tempFilePath = "./temp-qr-scan.png";
 
   try {
+    // Ensure output directory exists
+    await fs.promises.mkdir(outputDir, { recursive: true });
     // Remove data URL prefix if present (e.g., "data:image/png;base64,")
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
 
