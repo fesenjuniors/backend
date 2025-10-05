@@ -2,7 +2,7 @@
 
 ## When Does Game End?
 
-- **Trigger**: When any player's cumulative score (from shots + garbage collection) reaches or exceeds **500 points**
+- **Trigger**: When any player's cumulative score (from shots + garbage collection) reaches or exceeds **250 points**
 - **Check Location**: After every score update in `matchManager.updatePlayerScore()`
 
 ## Events Sent (in order):
@@ -76,8 +76,8 @@
 ### When score reaches threshold:
 
 ```
-🔍 Score check: 570 >= 500? true
-🎉 Player player_xxx (PlayerName) has reached the score threshold of 500! Current score: 570
+🔍 Score check: 270 >= 250? true
+🎉 Player player_xxx (PlayerName) has reached the score threshold of 250! Current score: 270
 🏁 Match end result: true, Match state is now: ended
 🏆 Game Over! Winner: PlayerName (570 points)
 ```
@@ -132,9 +132,9 @@ case 'player:lost':
 
 ## Testing Checklist
 
-- [ ] Player reaches 500+ points from QR shots only
-- [ ] Player reaches 500+ points from garbage collection only
-- [ ] Player reaches 500+ points from combination of both
+- [ ] Player reaches 250+ points from QR shots only
+- [ ] Player reaches 250+ points from garbage collection only
+- [ ] Player reaches 250+ points from combination of both
 - [ ] All 3 events are received by frontend
 - [ ] Winner receives `game:ended` + `player:won`
 - [ ] Losers receive `game:ended` + `player:lost`

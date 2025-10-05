@@ -96,7 +96,7 @@
 
     "game:ended": {
       "description": "Fired when the game ends due to a player reaching the score threshold",
-      "trigger": "When any player reaches or exceeds the scoreThreshold (default: 500 points)",
+      "trigger": "When any player reaches or exceeds the scoreThreshold (default: 250 points)",
       "eventStructure": {
         "type": "game:ended",
         "data": {

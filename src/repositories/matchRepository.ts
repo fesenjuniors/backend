@@ -273,7 +273,7 @@ export class MatchRepository {
           id: matchId,
           state: matchData.state,
           adminId: matchData.adminId,
-          scoreThreshold: matchData.scoreThreshold || 500, // Default to 500 if not set
+          scoreThreshold: matchData.scoreThreshold || 250, // Default to 250 if not set
           createdAt: matchData.createdAt
             ? matchData.createdAt.toDate()
             : new Date(),
@@ -422,7 +422,7 @@ export class MatchRepository {
         id: matchId,
         state: matchData.state,
         adminId: matchData.adminId,
-        scoreThreshold: matchData.scoreThreshold || 500, // Default to 500 if not set
+        scoreThreshold: matchData.scoreThreshold || 250, // Default to 250 if not set
         createdAt: matchData.createdAt
           ? matchData.createdAt.toDate()
           : new Date(),

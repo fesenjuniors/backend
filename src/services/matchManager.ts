@@ -39,7 +39,7 @@ class MatchManager {
         id: matchId,
         state: "waiting",
         adminId,
-        scoreThreshold: 500, // Default score threshold to win
+        scoreThreshold: 250, // Default score threshold to win
         createdAt: new Date(),
       };
 
