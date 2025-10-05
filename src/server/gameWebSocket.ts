@@ -282,56 +282,68 @@ async function handleShotAttempt(
   try {
     console.log(`Shot attempt received from shooter ${shooterId}`);
 
-    // 1. Call scanQRFromBase64 to get QR code content
-    const qrContent = await scanQRFromBase64(imageData);
-
+    // STEP 1: Try QR code scanning first (fast, no API calls)
     let targetId: string | null = null;
 
-    // 2. Parse the QR content if found
-    if (qrContent) {
-      try {
-        // Parse the JSON to extract playerId
-        const qrData = JSON.parse(qrContent);
-        console.log(`📄 Parsed QR data:`, qrData);
+    try {
+      const qrContent = await scanQRFromBase64(imageData);
 
-        // Extract the playerId from the QR data
-        if (qrData && qrData.playerId) {
-          targetId = qrData.playerId;
-          console.log(`✅ QR parsed successfully. Target player: ${targetId}`);
+      if (qrContent) {
+        try {
+          // Parse the JSON to extract playerId
+          const qrData = JSON.parse(qrContent);
+          console.log(`📄 Parsed QR data:`, qrData);
 
-          // Optional: Verify the matchId matches
-          if (qrData.matchId && qrData.matchId !== matchId) {
-            console.warn(
-              `⚠️ QR code is from different match: ${qrData.matchId} vs ${matchId}`
+          // Extract the playerId from the QR data
+          if (qrData && qrData.playerId) {
+            targetId = qrData.playerId;
+            console.log(
+              `✅ QR parsed successfully. Target player: ${targetId}`
             );
-            // You might want to treat this as a miss
-            // targetId = null;
+
+            // Optional: Verify the matchId matches
+            if (qrData.matchId && qrData.matchId !== matchId) {
+              console.warn(
+                `⚠️ QR code is from different match: ${qrData.matchId} vs ${matchId}`
+              );
+            }
+          } else {
+            console.log(
+              `❌ QR content doesn't contain playerId. QR data:`,
+              qrData
+            );
           }
-        } else {
+        } catch (parseError) {
           console.log(
-            `❌ QR content doesn't contain playerId. QR data:`,
-            qrData
+            `❌ Failed to parse QR content as JSON: ${qrContent}`,
+            parseError
           );
-        }
-      } catch (parseError) {
-        console.log(
-          `❌ Failed to parse QR content as JSON: ${qrContent}`,
-          parseError
-        );
-        // Don't set targetId here - let it fall through to garbage detection
-        // Only set targetId if we have a valid player ID format
-        if (
-          qrContent &&
-          qrContent.length > 10 &&
-          qrContent.startsWith("player_")
-        ) {
-          targetId = qrContent;
+          // Only set targetId if we have a valid player ID format
+          if (
+            qrContent &&
+            qrContent.length > 10 &&
+            qrContent.startsWith("player_")
+          ) {
+            targetId = qrContent;
+          }
         }
       }
+    } catch (qrError) {
+      console.log(`❌ QR scan failed:`, qrError);
+      // Continue to garbage detection
     }
-    // If no QR code found or parsing failed, do garbage detection
-    if (!targetId) {
-      console.log("hello");
+
+    // STEP 2: If QR found, handle as shot and return early
+    if (targetId) {
+      console.log(`Shot processed. Target ID: ${targetId}`);
+      await broadcastResult(matchId, shooterId, targetId, wsManager);
+      return;
+    }
+
+    // STEP 3: No QR found - proceed with garbage detection
+    console.log(`🔍 No QR code found, proceeding with garbage detection...`);
+
+    try {
       const result = await detectGarbageInImage(imageData);
       const bins: Bin[] = result.bins;
       const Current_garbage: Garbage[] = result.garbage;
@@ -521,14 +533,20 @@ async function handleShotAttempt(
           );
         }
       }
-
+    } catch (garbageError) {
+      console.error(`❌ Garbage detection failed:`, garbageError);
+      // Send graceful error response
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          data: {
+            message:
+              "Garbage detection temporarily unavailable. Please try again later.",
+          },
+        })
+      );
       return;
     }
-
-    console.log(`Shot processed. Target ID: ${targetId || "MISS"}`);
-
-    // 3. Pass to broadcastResult
-    await broadcastResult(matchId, shooterId, targetId, wsManager);
   } catch (error) {
     // If processing fails, send helpful error
     console.error("Error in shot attempt handler:", error);
