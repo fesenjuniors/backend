@@ -1,12 +1,4 @@
-/**
- * Shot Processing Service
- *
- * TO BE IMPLEMENTED BY ANOTHER HACKATHONEE
- *
- * This service handles the image processing to determine who got shot.
- * Input: base64 image from frontend
- * Output: targetId (the player who got shot) or null (if miss/failed scan)
- */
+import { scanQRFromBase64 } from "../utils/qr-base64-scanner";
 
 export interface ShotProcessingRequest {
   shooterId: string;
@@ -161,31 +153,25 @@ async function validateShotQualityWithAI(
 
 /**
  * Decode and scan QR with debug
- * STUB: TO BE IMPLEMENTED
+ * Uses real QR scanner implementation
  * Takes base64 image, returns player ID who got shot or null
  */
 export async function decodeAndScanQrWithDebug(imageBase64: string): Promise<string | null> {
   console.log("decodeAndScanQrWithDebug called with image size:", imageBase64.length);
   
-  // STUB IMPLEMENTATION
-  // TODO: Implement actual QR decoding logic
-  
-  // this for testing purposes only
-  if (imageBase64.includes('_HIT_')) {
-    console.log("FORCED HIT for testing");
-    const hitMarkerIndex = imageBase64.indexOf('_HIT_');
-    const targetId = imageBase64.substring(hitMarkerIndex + 5);
-    console.log("Extracted target ID:", targetId);
-    return targetId;
-  }
-  if (imageBase64.includes('_MISS')) {
-    console.log("FORCED MISS for testing");
+  try {
+    // Use the real QR scanner
+    const qrId = await scanQRFromBase64(imageBase64);
+    
+    if (qrId) {
+      console.log("✅ QR scan successful, found ID:", qrId);
+      return qrId;
+    } else {
+      console.log("❌ No QR code found in image");
+      return null;
+    }
+  } catch (error) {
+    console.error("Error scanning QR code:", error);
     return null;
   }
-
-  if (Math.random() > 0.5) {
-    return `player-${Math.floor(Math.random() * 10) + 1}`;
-  }
-  
-  return null;
 }
