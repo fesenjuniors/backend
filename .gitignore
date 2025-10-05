@@ -1,69 +1,52 @@
-# Dependencies
+# Node modules
 node_modules/
-package-lock.json
-
-# Build output
-dist/
-build/
-*.js.map
-*.d.ts.map
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Environment variables
 .env
 .env.local
 .env.*.local
 
-# Logs
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
+# Build output
+dist/
+build/
+*.js
+*.js.map
 
-# OS files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# IDE
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
-*.swn
-.project
-.settings/
-*.sublime-workspace
-*.sublime-project
+*~
+.DS_Store
 
-# Testing
+# Certificates (never commit these!)
+certs/
+*.pem
+*.key
+*.crt
+*.csr
+
+# Firebase credentials (sensitive!)
+firebase-service-account.json
+*-service-account.json
+
+# Logs
+logs/
+*.log
+
+# Lock files (optional, based on your preference)
+# package-lock.json
+# yarn.lock
+# bun.lockb
+
+# Test coverage
 coverage/
 .nyc_output/
-test-client.js
-test-client.html
-test-qr-cli.ts
-generate-test-qr.ts
-test-qr-*.png
-src/test-pictures/
-src/utils/test-qr.ts
 
-# Misc
-*.tgz
-*.tmp
-.cache/
-temp/
+# Temporary files
 tmp/
-
-# ZXing test files
-test-zxing.ts
-debug-images/
-
-# Google Cloud credentials
-google-credentials.json
-*-credentials.json
-*.json.key
+temp/

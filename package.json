@@ -6,8 +6,11 @@
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "dev": "nodemon --watch src --ext ts --exec ts-node src/server/server.ts",
+    "dev:https": "HTTPS_ENABLED=true nodemon --watch src --ext ts --exec ts-node src/server/server.ts",
     "start": "node dist/server/server.js",
-    "test:websocket": "node test-websocket.js"
+    "start:https": "HTTPS_ENABLED=true node dist/server/server.js",
+    "test:websocket": "node test-websocket.js",
+    "generate-certs": "ts-node -e \"require('./src/utils/certificateGenerator').generateSelfSignedCertificate()\""
   },
   "repository": {
     "type": "git",
