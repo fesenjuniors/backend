@@ -14,6 +14,7 @@ import type {
   LeaderboardUpdatePayload,
   ShotAttemptPayload,
 } from "../types/game";
+import { scanQRFromBase64 } from "../utils/qr-base64-scanner";
 
 /**
  * Setup game-specific WebSocket event handlers
@@ -199,8 +200,10 @@ async function handleShotAttempt(
   try {
     console.log(`Shot attempt received from shooter ${shooterId}`);
 
-    // 1. Call decodeAndScanQrWithDebug to get targetId
-    const targetId = await decodeAndScanQrWithDebug(imageData);
+    // 1. Call scanQRFromBase64 to get targetId
+    const targetId = await scanQRFromBase64(imageData);
+
+    console.log(`Shot processed. Target ID: ${targetId}`);
 
     // 2. Pass to broadcastResult
     await broadcastResult(matchId, shooterId, targetId, wsManager);

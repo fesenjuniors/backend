@@ -59,7 +59,7 @@ class MatchManager {
   /**
    * Add a player to a match
    */
-  addPlayer(matchId: string, playerName: string): Player | null {
+  addPlayer(matchId: string, playerName: string, playerId?: string): Player | null {
     const match = this.matches.get(matchId);
     if (!match) {
       console.error(`Match not found: ${matchId}`);
@@ -71,11 +71,11 @@ class MatchManager {
       return null;
     }
 
-    const playerId = this.generatePlayerId();
-    const qrCode = this.generateQrCode(matchId, playerId);
+    const finalPlayerId = playerId || this.generatePlayerId();
+    const qrCode = this.generateQrCode(matchId, finalPlayerId);
 
     const player: Player = {
-      id: playerId,
+      id: finalPlayerId,
       name: playerName,
       qrCode,
       score: 0,
@@ -84,8 +84,8 @@ class MatchManager {
       joinedAt: new Date(),
     };
 
-    match.players.set(playerId, player);
-    console.log(`Player ${playerId} (${playerName}) joined match ${matchId}`);
+    match.players.set(finalPlayerId, player);
+    console.log(`Player ${finalPlayerId} (${playerName}) joined match ${matchId}`);
 
     // Save player to Firebase
     matchRepository.savePlayer(matchId, player).catch((err) => {

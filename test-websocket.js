@@ -1,23 +1,24 @@
 import WebSocket from 'ws';
 import http from 'http';
+import fs from 'fs';
 
 /**
  * Simple test script to verify websocket shot handling
- * Tests both hit and miss scenarios
+ * Tests both hit and miss scenarios using real image files
  */
 async function testShotHandling() {
   const serverUrl = 'ws://localhost:8080/ws';
   const httpUrl = 'http://localhost:8080';
 
-  console.log('🧪 Testing HIT scenario...');
-  await runTestScenario(true); // Force hit
+  console.log('🧪 Testing HIT scenario with hit.jpg...');
+  await runTestScenario('hit.jpg', true); // Real hit image
 
-  console.log('\n🧪 Testing MISS scenario...');
-  await runTestScenario(false); // Force miss
+  console.log('\n🧪 Testing MISS scenario with miss.jpg...');
+  await runTestScenario('miss.jpg', false); // Real miss image
 
   console.log('\n✅ All tests completed!');
 
-  async function runTestScenario(forceHit) {
+  async function runTestScenario(imageFile, shouldHit) {
     return new Promise((resolve, reject) => {
       console.log('Creating test match via HTTP...');
 
@@ -38,7 +39,7 @@ async function testShotHandling() {
             console.log('Match created:', matchData);
 
             // Now join a player to the match
-            joinPlayer(matchData.matchId, forceHit, resolve, reject);
+            joinPlayer(matchData.matchId, imageFile, shouldHit, resolve, reject);
           } catch (error) {
             console.error('Error parsing match creation response:', error);
             reject(error);
@@ -55,7 +56,7 @@ async function testShotHandling() {
     });
   }
 
-  function joinPlayer(matchId, forceHit, resolve, reject) {
+  function joinPlayer(matchId, imageFile, shouldHit, resolve, reject) {
     console.log('Joining player to match...');
 
     const joinRequest = http.request(`${httpUrl}/api/match/${matchId}/join`, {
@@ -76,7 +77,7 @@ async function testShotHandling() {
           console.log('Player 1 joined:', playerData);
 
           // Join a second player
-          joinSecondPlayer(matchId, playerData.playerId, forceHit, resolve, reject);
+          joinSecondPlayer(matchId, playerData.playerId, imageFile, shouldHit, resolve, reject);
         } catch (error) {
           console.error('Error parsing player join response:', error);
           reject(error);
@@ -92,7 +93,7 @@ async function testShotHandling() {
     joinRequest.end();
   }
 
-  function joinSecondPlayer(matchId, firstPlayerId, forceHit, resolve, reject) {
+  function joinSecondPlayer(matchId, firstPlayerId, imageFile, shouldHit, resolve, reject) {
     console.log('Joining second player to match...');
 
     const joinRequest2 = http.request(`${httpUrl}/api/match/${matchId}/join`, {
@@ -102,7 +103,12 @@ async function testShotHandling() {
       },
     });
 
-    joinRequest2.write(JSON.stringify({ playerName: 'Test Player 2' }));
+    // For hit scenario, use the specific player ID that matches the QR code
+    const playerData = shouldHit 
+      ? { playerName: 'Test Player 2', playerId: 'http://en.m.wikipedia.org' }
+      : { playerName: 'Test Player 2' };
+
+    joinRequest2.write(JSON.stringify(playerData));
 
     joinRequest2.on('response', (res) => {
       let data = '';
@@ -113,7 +119,7 @@ async function testShotHandling() {
           console.log('Player 2 joined:', playerData2);
 
           // Now start the match
-          startMatch(matchId, firstPlayerId, forceHit, resolve, reject);
+          startMatch(matchId, firstPlayerId, imageFile, shouldHit, resolve, reject);
         } catch (error) {
           console.error('Error parsing second player join response:', error);
           reject(error);
@@ -129,7 +135,7 @@ async function testShotHandling() {
     joinRequest2.end();
   }
 
-  function startMatch(matchId, playerId, forceHit, resolve, reject) {
+  function startMatch(matchId, playerId, imageFile, shouldHit, resolve, reject) {
     console.log('Starting the match...');
 
     const startRequest = http.request(`${httpUrl}/api/match/${matchId}/start`, {
@@ -148,7 +154,7 @@ async function testShotHandling() {
           console.log('Match started:', startData);
 
           // Now connect via websocket
-          connectAndTest(matchId, playerId, forceHit, resolve, reject);
+          connectAndTest(matchId, playerId, imageFile, shouldHit, resolve, reject);
         } catch (error) {
           console.error('Error parsing match start response:', error);
           reject(error);
@@ -164,7 +170,7 @@ async function testShotHandling() {
     startRequest.end();
   }
 
-  function connectAndTest(matchId, playerId, forceHit, resolve, reject) {
+  function connectAndTest(matchId, playerId, imageFile, shouldHit, resolve, reject) {
     console.log('Connecting to websocket server...');
 
     const ws = new WebSocket(serverUrl);
@@ -193,32 +199,39 @@ async function testShotHandling() {
       if (message.type === 'match:state') {
         console.log('Player connected successfully, sending shot attempt...');
 
-        // Get the target player ID from the match state
-        const players = message.data.players;
-        const targetPlayerId = players.find(p => p.id !== playerId)?.id;
+        // Read the image file and convert to base64
+        try {
+          const imageBuffer = fs.readFileSync(imageFile);
+          const base64Image = imageBuffer.toString('base64');
 
-        // Create a dummy base64 image with embedded target player ID
-        const dummyBase64Image = forceHit 
-          ? `iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==_HIT_${targetPlayerId}`  // Force hit with real target
-          : 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==_MISS'; // Force miss
+          console.log(`Loaded ${imageFile}, size: ${base64Image.length} bytes`);
 
-        const shotMessage = {
-          type: 'shot:attempt',
-          data: {
-            matchId: matchId,
-            shooterId: playerId,
-            imageData: dummyBase64Image
-          }
-        };
+          const shotMessage = {
+            type: 'shot:attempt',
+            data: {
+              matchId: matchId,
+              shooterId: playerId,
+              imageData: base64Image
+            }
+          };
 
-        console.log('Sending shot attempt message');
-        ws.send(JSON.stringify(shotMessage));
+          console.log('Sending shot attempt message');
+          ws.send(JSON.stringify(shotMessage));
+        } catch (error) {
+          console.error('Error reading image file:', error);
+          reject(error);
+        }
       }
 
       // Listen for shot result broadcast
       if (message.type === 'shot:result') {
         console.log('Shot result received:', message.data);
-        console.log(forceHit ? '✅ Hit scenario tested successfully!' : '✅ Miss scenario tested successfully!');
+        const actualHit = message.data.hit;
+        if (actualHit === shouldHit) {
+          console.log(`✅ ${shouldHit ? 'Hit' : 'Miss'} scenario tested successfully!`);
+        } else {
+          console.log(`⚠️  Expected ${shouldHit ? 'hit' : 'miss'} but got ${actualHit ? 'hit' : 'miss'}`);
+        }
         ws.close();
         resolve();
       }
@@ -240,12 +253,12 @@ async function testShotHandling() {
       console.log('WebSocket connection closed');
     });
 
-    // Timeout after 10 seconds
+    // Timeout after 15 seconds (QR scanning might take longer)
     setTimeout(() => {
       console.log('❌ Test timed out');
       ws.close();
       reject(new Error('Test timed out'));
-    }, 10000);
+    }, 15000);
   }
 }
 
