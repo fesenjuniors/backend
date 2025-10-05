@@ -7,7 +7,7 @@ import {
   decodeAndScanQrWithDebug,
 } from "../services/shotProcessor";
 import { broadcastResult } from "../services/shotHandler";
-import type {
+import {
   GameWebSocketEvent,
   PlayerConnectPayload,
   PlayerDisconnectPayload,
@@ -17,8 +17,14 @@ import type {
   LeaderboardUpdatePayload,
   ShotAttemptPayload,
   MatchAdminAction,
+  GarbageType,
+  BinType,
+  Bin,
+  Garbage,
 } from "../types/game";
 import { scanQRFromBase64 } from "../utils/qr-base64-scanner";
+import { detectGarbageInImage } from "../utils/garbage-detector";
+import { inventoryRepository } from "../repositories/inventoryRepository";
 
 /**
  * Setup game-specific WebSocket event handlers
@@ -308,13 +314,215 @@ async function handleShotAttempt(
           );
         }
       } catch (parseError) {
-        console.log(`❌ Failed to parse QR content as JSON: ${qrContent}`);
-        // If it's not JSON, maybe it's just the player ID directly
-        // This maintains backward compatibility if needed
-        targetId = qrContent;
+        console.log(
+          `❌ Failed to parse QR content as JSON: ${qrContent}`,
+          parseError
+        );
+        // Don't set targetId here - let it fall through to garbage detection
+        // Only set targetId if we have a valid player ID format
+        if (
+          qrContent &&
+          qrContent.length > 10 &&
+          qrContent.startsWith("player_")
+        ) {
+          targetId = qrContent;
+        }
       }
-    } else {
-      console.log(`❌ No QR code detected - MISS`);
+    }
+    // If no QR code found or parsing failed, do garbage detection
+    if (!targetId) {
+      console.log("hello");
+      const result = await detectGarbageInImage(imageData);
+      const bins: Bin[] = result.bins;
+      const Current_garbage: Garbage[] = result.garbage;
+
+      if (Current_garbage.length > 0) {
+        console.log(
+          `Detected ${Current_garbage.length} garbage item(s):`,
+          Current_garbage.map(
+            (garbage) => `${garbage.itemName} (${garbage.itemType})`
+          )
+        );
+      }
+
+      // Check for bins - could be used for scoring or validation
+      if (bins.length > 0) {
+        console.log(
+          `Detected ${bins.length} bin(s):`,
+          bins.map((bin) => `${bin.itemName} (${bin.itemType})`)
+        );
+
+        const inventoryItems = await inventoryRepository.popPlayerInventory(
+          matchId,
+          shooterId
+        );
+        console.log(
+          `Inventory items (${inventoryItems.length}):`,
+          inventoryItems.map(
+            (it) => `${it.itemName} (${it.itemType}) - CO₂ ${it.co2Savings}`
+          )
+        );
+
+        // Normalize inventory to Garbage objects (defensive) and merge
+        const normalizedInventory: Garbage[] = inventoryItems.map((it) => ({
+          id: (it as any).id,
+          itemName: it.itemName ?? "Unknown item",
+          itemType: it.itemType,
+          co2Savings: typeof it.co2Savings === "number" ? it.co2Savings : 0,
+        }));
+
+        Current_garbage.push(...normalizedInventory);
+        console.log(
+          `Combined Current_garbage (${Current_garbage.length}):`,
+          Current_garbage.map(
+            (g) => `${g.itemName} (${g.itemType}) - CO₂ ${g.co2Savings}`
+          )
+        );
+
+        // For each bin: remove garbage of the same type (recycled correctly)
+        const binToGarbageMap: Record<BinType, GarbageType | null> = {
+          [BinType.FOOD_SCRAPS_BIN]: GarbageType.FOOD_SCRAPS,
+          [BinType.MIXED_PAPER_BIN]: GarbageType.MIXED_PAPER,
+          [BinType.RECYCLABLE_BIN]: GarbageType.RECYCLABLE,
+          [BinType.LANDFILL_BIN]: GarbageType.LANDFILL,
+          [BinType.UNKNOWN_BIN]: null,
+        };
+
+        const supportedTypes = new Set<GarbageType>();
+        for (const b of bins) {
+          const mapped = binToGarbageMap[b.itemType as BinType];
+          if (mapped) supportedTypes.add(mapped);
+        }
+
+        const recyclableNow = Current_garbage.filter((g) =>
+          supportedTypes.has(g.itemType)
+        );
+        if (recyclableNow.length > 0) {
+          console.log(
+            `Recycling ${recyclableNow.length} item(s) into matching bins:`,
+            recyclableNow.map((g) => `${g.itemName} (${g.itemType})`)
+          );
+        }
+
+        // Calculate total CO₂ savings score from recycled items
+        let totalCO2Score = 0;
+        const recycledItems: Garbage[] = [];
+
+        // Remove recycled items from Current_garbage and calculate score
+        if (supportedTypes.size > 0) {
+          const remainingAfterRecycle = Current_garbage.filter((g) => {
+            if (supportedTypes.has(g.itemType)) {
+              // This item is being recycled - add to score and track it
+              const itemScore = Math.max(15, g.co2Savings * 50); // Minimum 15 points, or CO₂ * 50
+              totalCO2Score += itemScore;
+              recycledItems.push(g);
+              console.log(
+                `♻️ Recycled ${g.itemName} (${g.itemType}) - CO₂ saved: ${
+                  g.co2Savings
+                }kg (${itemScore.toFixed(0)} points)`
+              );
+
+              // Send WebSocket event to frontend about item redemption
+              const redemptionEvent = {
+                type: "item_redeemed",
+                data: {
+                  matchId,
+                  playerId: shooterId,
+                  item: {
+                    name: g.itemName,
+                    type: g.itemType,
+                    co2Savings: g.co2Savings,
+                    pointsEarned: itemScore,
+                  },
+                  message: `♻️ Recycled ${g.itemName} - CO₂ saved: ${
+                    g.co2Savings
+                  }kg (${itemScore.toFixed(0)} points)`,
+                },
+              };
+
+              // Broadcast to all players in the match
+              wsManager.broadcast(JSON.stringify(redemptionEvent));
+
+              return false; // Remove from Current_garbage
+            }
+            return true; // Keep in Current_garbage
+          });
+
+          Current_garbage.length = 0;
+          Current_garbage.push(...remainingAfterRecycle);
+
+          // Log recycling summary with total score
+          if (recycledItems.length > 0) {
+            console.log(
+              `✅ Successfully recycled ${
+                recycledItems.length
+              } item(s) - Total points earned: ${totalCO2Score.toFixed(3)}`
+            );
+          }
+        }
+
+        // If any garbage left without matching bins, give default points
+        if (Current_garbage.length > 0) {
+          const defaultPoints = Current_garbage.length * 20; // 20 points per unmatched item
+          totalCO2Score += defaultPoints;
+
+          console.log(
+            `🗑️ No matching bins for ${Current_garbage.length} item(s); giving default points:`,
+            Current_garbage.map((g) => `${g.itemName} (${g.itemType})`)
+          );
+          console.log(
+            `📦 Default points earned: ${defaultPoints} (20 per item)`
+          );
+
+          // Send WebSocket event for unmatched items
+          const unmatchedEvent = {
+            type: "items_collected",
+            data: {
+              matchId,
+              playerId: shooterId,
+              items: Current_garbage.map((g) => ({
+                name: g.itemName,
+                type: g.itemType,
+                co2Savings: g.co2Savings,
+              })),
+              pointsEarned: defaultPoints,
+              message: `📦 Collected ${Current_garbage.length} item(s) - ${defaultPoints} points earned`,
+            },
+          };
+
+          // Broadcast to all players in the match
+          wsManager.broadcast(JSON.stringify(unmatchedEvent));
+
+          Current_garbage.length = 0; // remove remaining
+        }
+
+        // Update player score based on total points earned
+        if (totalCO2Score > 0) {
+          await matchManager.updatePlayerScore(
+            matchId,
+            shooterId,
+            totalCO2Score
+          );
+          console.log(
+            `🏆 Player ${shooterId} earned ${totalCO2Score.toFixed(
+              3
+            )} points total!`
+          );
+        }
+      }
+
+      // If no bins detected, add detected garbage items to player's inventory
+      if (Current_garbage.length > 0) {
+        for (const item of Current_garbage) {
+          await inventoryRepository.addItemToInventory(
+            matchId,
+            shooterId,
+            item
+          );
+        }
+      }
+
+      return;
     }
 
     console.log(`Shot processed. Target ID: ${targetId || "MISS"}`);

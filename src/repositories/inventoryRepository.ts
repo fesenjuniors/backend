@@ -5,26 +5,18 @@
 
 import { getDb, isFirebaseAvailable } from "../config/firebase";
 import { FieldValue } from "firebase-admin/firestore";
-import type { InventoryItem, ScoreEntry, Player } from "../types/game";
+import type { InventoryItem, ScoreEntry, Player, Garbage } from "../types/game";
 
 export class InventoryRepository {
-  private readonly COLLECTION = "inventory";
-  private readonly SCORES_COLLECTION = "scores";
-
   /**
    * Add item to player's inventory
    */
   async addItemToInventory(
     matchId: string,
     playerId: string,
-    item: InventoryItem
+    item: Garbage
   ): Promise<void> {
-    if (!isFirebaseAvailable()) {
-      console.log(
-        `[DEV] Would add item ${item.id} to player ${playerId} inventory`
-      );
-      return;
-    }
+    if (!isFirebaseAvailable()) return;
 
     try {
       const db = getDb();
@@ -34,11 +26,23 @@ export class InventoryRepository {
         .collection("players")
         .doc(playerId);
 
-      await playerRef.update({
-        inventory: FieldValue.arrayUnion(item),
-      });
+      const itemWithId: Garbage = {
+        ...item,
+        id:
+          item.id ??
+          `garbage_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      };
 
-      console.log(`Item ${item.id} added to player ${playerId} inventory`);
+      await playerRef.set(
+        { inventory: FieldValue.arrayUnion(itemWithId) },
+        { merge: true }
+      );
+
+      console.log(
+        `Item ${
+          itemWithId.itemName ?? itemWithId.id
+        } added to player ${playerId} inventory`
+      );
     } catch (error) {
       console.error("Error adding item to inventory:", error);
       throw error;
@@ -68,16 +72,18 @@ export class InventoryRepository {
         .collection("players")
         .doc(playerId);
 
-      // Get current inventory, filter out the item, then update
-      const playerDoc = await playerRef.get();
-      const currentInventory: InventoryItem[] =
-        playerDoc.data()?.inventory || [];
-      const updatedInventory = currentInventory.filter(
-        (item) => item.id !== itemId
-      );
-
-      await playerRef.update({
-        inventory: updatedInventory,
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(playerRef);
+        const data = snap.data() || {};
+        const current: any[] = Array.isArray(data.inventory)
+          ? data.inventory
+          : [];
+        const updated = current.filter((it) => {
+          // Support both schemas: items with `id` or `itemId`
+          const candidateId = it?.id ?? it?.itemId;
+          return candidateId !== itemId;
+        });
+        tx.update(playerRef, { inventory: updated });
       });
 
       console.log(`Item ${itemId} removed from player ${playerId} inventory`);
@@ -93,7 +99,7 @@ export class InventoryRepository {
   async getPlayerInventory(
     matchId: string,
     playerId: string
-  ): Promise<InventoryItem[]> {
+  ): Promise<Garbage[]> {
     if (!isFirebaseAvailable()) {
       console.log(`[DEV] Would fetch inventory for player ${playerId}`);
       return [];
@@ -108,18 +114,52 @@ export class InventoryRepository {
         .doc(playerId)
         .get();
 
-      const inventory: InventoryItem[] = playerDoc.data()?.inventory || [];
-
-      // Convert Firestore timestamps to Date objects
-      return inventory.map((item) => ({
-        ...item,
-        pickedUpAt:
-          item.pickedUpAt instanceof Date
-            ? item.pickedUpAt
-            : (item.pickedUpAt as any).toDate(),
-      }));
+      const inventory: Garbage[] = (playerDoc.data()?.inventory ||
+        []) as Garbage[];
+      return inventory;
     } catch (error) {
       console.error("Error fetching player inventory:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Atomically fetch and clear player's inventory (pop semantics)
+   */
+  async popPlayerInventory(
+    matchId: string,
+    playerId: string
+  ): Promise<Garbage[]> {
+    if (!isFirebaseAvailable()) {
+      console.log(`[DEV] Would pop inventory for player ${playerId}`);
+      return [];
+    }
+
+    try {
+      const db = getDb();
+      const playerRef = db
+        .collection("matches")
+        .doc(matchId)
+        .collection("players")
+        .doc(playerId);
+
+      const popped: Garbage[] = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(playerRef);
+        const data = snap.data() || {};
+        const current: Garbage[] = Array.isArray(data.inventory)
+          ? (data.inventory as Garbage[])
+          : [];
+        // Clear inventory
+        tx.update(playerRef, { inventory: [] });
+        return current;
+      });
+
+      console.log(
+        `Popped ${popped.length} inventory item(s) for player ${playerId}`
+      );
+      return popped;
+    } catch (error) {
+      console.error("Error popping player inventory:", error);
       throw error;
     }
   }

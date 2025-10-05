@@ -15,6 +15,8 @@
     "test:match-states": "ts-node tests/test-match-states.ts",
     "test:match-restart": "ts-node tests/test-match-restart.ts",
     "test:rejoin-restart": "ts-node tests/test-rejoin-and-restart.ts",
+    "test:garbage": "ts-node tests/test-garbage-base64.ts",
+    "test:websocket-firebase": "ts-node tests/test-websocket-firebae.ts",
     "start:https": "HTTPS_ENABLED=true node dist/server/server.js",
     "generate-certs": "ts-node -e \"require('./src/utils/certificateGenerator').generateSelfSignedCertificate()\""
   },
@@ -38,6 +40,7 @@
     "firebase-admin": "^12.0.0",
     "jsqr": "^1.4.0",
     "node-fetch": "^3.3.2",
+    "openai": "^6.1.0",
     "pngjs": "^7.0.0",
     "qrcode": "^1.5.4",
     "sharp": "^0.34.4",
