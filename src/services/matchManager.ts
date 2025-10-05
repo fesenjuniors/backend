@@ -554,6 +554,7 @@ class MatchManager {
       const qrCodeBase64 = await QRCode.toDataURL(jsonString, {
         width: 256,
         margin: 2,
+        errorCorrectionLevel: 'H',
         color: {
           dark: "#000000",
           light: "#FFFFFF",
