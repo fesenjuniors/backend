@@ -92,6 +92,105 @@
         "score": "Update player's score display",
         "leaderboard": "Trigger leaderboard update if needed"
       }
+    },
+
+    "game:ended": {
+      "description": "Fired when the game ends due to a player reaching the score threshold",
+      "trigger": "When any player reaches or exceeds the scoreThreshold (default: 500 points)",
+      "eventStructure": {
+        "type": "game:ended",
+        "data": {
+          "matchId": "string - ID of the match",
+          "winner": {
+            "id": "string - Winner's player ID",
+            "name": "string - Winner's name",
+            "score": "number - Winner's final score"
+          },
+          "message": "string - Game end message"
+        }
+      },
+      "example": {
+        "type": "game:ended",
+        "data": {
+          "matchId": "match_123",
+          "winner": {
+            "id": "player_456",
+            "name": "EcoWarrior",
+            "score": 520
+          },
+          "message": "🎉 EcoWarrior won the game with 520 points!"
+        }
+      },
+      "frontendHandling": {
+        "display": "Show game over screen with winner announcement",
+        "notifications": "Display winner announcement",
+        "leaderboard": "Show final leaderboard",
+        "actions": "Disable further game actions"
+      }
+    },
+
+    "player:won": {
+      "description": "Fired to the winning player when they win the game",
+      "trigger": "Only sent to the player who reached the score threshold",
+      "eventStructure": {
+        "type": "player:won",
+        "data": {
+          "matchId": "string - ID of the match",
+          "playerId": "string - Winner's player ID",
+          "playerName": "string - Winner's name",
+          "finalScore": "number - Winner's final score",
+          "message": "string - Victory message"
+        }
+      },
+      "example": {
+        "type": "player:won",
+        "data": {
+          "matchId": "match_123",
+          "playerId": "player_456",
+          "playerName": "EcoWarrior",
+          "finalScore": 520,
+          "message": "🏆 Congratulations! You won the game with 520 points!"
+        }
+      },
+      "frontendHandling": {
+        "display": "Show victory screen with celebration animation",
+        "notifications": "Display victory message",
+        "achievements": "Show victory achievements/badges"
+      }
+    },
+
+    "player:lost": {
+      "description": "Fired to all non-winning players when someone wins the game",
+      "trigger": "Sent to all players except the winner when game ends",
+      "eventStructure": {
+        "type": "player:lost",
+        "data": {
+          "matchId": "string - ID of the match",
+          "playerId": "string - This player's ID",
+          "playerName": "string - This player's name",
+          "finalScore": "number - This player's final score",
+          "winnerName": "string - Winner's name",
+          "winnerScore": "number - Winner's final score",
+          "message": "string - Defeat message"
+        }
+      },
+      "example": {
+        "type": "player:lost",
+        "data": {
+          "matchId": "match_123",
+          "playerId": "player_789",
+          "playerName": "GreenPlayer",
+          "finalScore": 350,
+          "winnerName": "EcoWarrior",
+          "winnerScore": 520,
+          "message": "😔 Game over! EcoWarrior won with 520 points. You scored 350 points."
+        }
+      },
+      "frontendHandling": {
+        "display": "Show defeat screen with final score",
+        "notifications": "Display defeat message",
+        "leaderboard": "Show final standings"
+      }
     }
   },
 

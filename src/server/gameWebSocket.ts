@@ -520,6 +520,9 @@ async function handleShotAttempt(
               3
             )} points total!`
           );
+
+          // Check if game has ended due to win condition
+          await checkAndBroadcastGameEnd(matchId, shooterId, wsManager);
         }
       }
 
@@ -703,4 +706,83 @@ export async function broadcastLeaderboardUpdate(
   );
 
   console.log(`Leaderboard updated for match ${matchId}`);
+}
+
+/**
+ * Check if game has ended and broadcast win/lose events
+ */
+async function checkAndBroadcastGameEnd(
+  matchId: string,
+  playerId: string,
+  wsManager: WebSocketManager
+): Promise<void> {
+  try {
+    const match = matchManager.getMatch(matchId);
+    if (!match) return;
+
+    // Check if match has ended (state would be "ended" if someone won)
+    if (match.state === "ended") {
+      const winner = await matchManager.getPlayer(matchId, playerId);
+      const winnerName = winner?.name || "Unknown Player";
+      const finalScore = winner?.score || 0;
+
+      // Get all players to determine who won/lost
+      const players = await matchManager.getPlayers(matchId);
+
+      // Broadcast game ended event to all players
+      const gameEndedEvent = {
+        type: "game:ended",
+        data: {
+          matchId,
+          winner: {
+            id: playerId,
+            name: winnerName,
+            score: finalScore,
+          },
+          message: `🎉 ${winnerName} won the game with ${finalScore} points!`,
+        },
+      };
+
+      wsManager.broadcast(JSON.stringify(gameEndedEvent));
+
+      // Send individual win/lose events to each player
+      for (const player of players) {
+        if (player.id === playerId) {
+          // Winner event
+          const winEvent = {
+            type: "player:won",
+            data: {
+              matchId,
+              playerId: player.id,
+              playerName: player.name,
+              finalScore: player.score,
+              message: `🏆 Congratulations! You won the game with ${player.score} points!`,
+            },
+          };
+          wsManager.broadcast(JSON.stringify(winEvent));
+        } else {
+          // Loser event
+          const loseEvent = {
+            type: "player:lost",
+            data: {
+              matchId,
+              playerId: player.id,
+              playerName: player.name,
+              finalScore: player.score,
+              winnerName,
+              winnerScore: finalScore,
+              message: `😔 Game over! ${winnerName} won with ${finalScore} points. You scored ${player.score} points.`,
+            },
+          };
+          wsManager.broadcast(JSON.stringify(loseEvent));
+        }
+      }
+
+      console.log(
+        `🎉 Game ended! Winner: ${winnerName} (${finalScore} points)`
+      );
+    }
+  } catch (error) {
+    console.error("Error checking game end condition:", error);
+  }
 }

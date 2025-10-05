@@ -111,6 +111,7 @@ router.get("/api/match/:matchId", async (req: Request, res: Response) => {
       id: match.id,
       state: match.state,
       adminId: match.adminId,
+      scoreThreshold: match.scoreThreshold,
       players: playerData,
       totalPlayers: playerData.length,
       createdAt: match.createdAt.toISOString(),

@@ -64,6 +64,7 @@ export interface Match {
   id: string;
   state: MatchState;
   adminId: string; // ID of the match admin
+  scoreThreshold: number; // Points needed to win (default: 500)
   createdAt: Date;
   startedAt?: Date;
   pausedAt?: Date;
