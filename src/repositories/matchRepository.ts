@@ -4,7 +4,7 @@
  */
 
 import { getDb, isFirebaseAvailable } from "../config/firebase";
-import type { Match, Player } from "../types/game";
+import type { Match, Player, InventoryItem, ScoreEntry } from "../types/game";
 
 export class MatchRepository {
   private readonly COLLECTION = "matches";
@@ -218,8 +218,8 @@ export class MatchRepository {
     matchId: string,
     playerId: string,
     updates: {
-      inventory?: any[];
-      scoreHistory?: any[];
+      inventory?: InventoryItem[];
+      scoreHistory?: ScoreEntry[];
       score?: number;
     }
   ): Promise<void> {

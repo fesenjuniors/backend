@@ -111,6 +111,7 @@ export class InventoryRepository {
           name: data.name,
           description: data.description,
           value: data.value,
+          potentialScore: data.potentialScore || data.value, // Fallback to value if potentialScore not set
           pickedUpAt: data.pickedUpAt.toDate(),
           location: data.location,
           metadata: data.metadata,
@@ -272,6 +273,7 @@ export class InventoryRepository {
             name: data.name,
             description: data.description,
             value: data.value,
+            potentialScore: data.potentialScore || data.value, // Fallback to value if potentialScore not set
             pickedUpAt: data.pickedUpAt.toDate(),
             location: data.location,
             metadata: data.metadata,

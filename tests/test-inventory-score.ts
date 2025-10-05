@@ -33,13 +33,20 @@ const TEST_ADMIN_NAME = "Test Admin";
 const TEST_PLAYER_NAME = "Test Player";
 
 // Helper function to generate test items
-function createTestItem(type: ItemType, value: number): InventoryItem {
+function createTestItem(
+  type: ItemType,
+  value: number,
+  potentialScore?: number
+): InventoryItem {
   return {
     id: `item_${randomBytes(4).toString("hex")}`,
     type,
     name: `${type.replace("_", " ")} Item`,
-    description: `A test ${type} item worth ${value} points`,
+    description: `A test ${type} item worth ${value} points (max: ${
+      potentialScore || value * 2
+    } points)`,
     value,
+    potentialScore: potentialScore || value * 2, // Default to 2x the base value
     pickedUpAt: new Date(),
     location: {
       lat: 49.2827 + (Math.random() - 0.5) * 0.01,
@@ -93,17 +100,17 @@ async function runTests() {
     // Test 3: Add items to player inventory
     console.log("3️⃣ Adding items to player inventory...");
     const testItems: InventoryItem[] = [
-      createTestItem("plastic_bottle", 10),
-      createTestItem("can", 15),
-      createTestItem("paper", 5),
-      createTestItem("glass", 20),
-      createTestItem("organic", 8),
+      createTestItem("plastic_bottle", 10, 25), // Base: 10, Max: 25
+      createTestItem("can", 15, 30), // Base: 15, Max: 30
+      createTestItem("paper", 5, 12), // Base: 5, Max: 12
+      createTestItem("glass", 20, 40), // Base: 20, Max: 40
+      createTestItem("organic", 8, 18), // Base: 8, Max: 18
     ];
 
     for (const item of testItems) {
       await inventoryRepository.addItemToInventory(match.id, player.id, item);
       console.log(
-        `   ✅ Added ${item.name} (${item.type}) - ${item.value} points`
+        `   ✅ Added ${item.name} (${item.type}) - ${item.value} points (max: ${item.potentialScore} points)`
       );
     }
     console.log(`✅ Added ${testItems.length} items to inventory\n`);
@@ -117,7 +124,9 @@ async function runTests() {
     console.log(`✅ Retrieved ${storedInventory.length} items from database:`);
     storedInventory.forEach((item, index) => {
       console.log(
-        `   ${index + 1}. ${item.name} (${item.type}) - ${item.value} points`
+        `   ${index + 1}. ${item.name} (${item.type}) - ${
+          item.value
+        } points (max: ${item.potentialScore} points)`
       );
     });
     console.log();
@@ -212,7 +221,9 @@ async function runTests() {
     console.log(`✅ Final inventory has ${finalInventory.length} items:`);
     finalInventory.forEach((item, index) => {
       console.log(
-        `   ${index + 1}. ${item.name} (${item.type}) - ${item.value} points`
+        `   ${index + 1}. ${item.name} (${item.type}) - ${
+          item.value
+        } points (max: ${item.potentialScore} points)`
       );
     });
     console.log();
@@ -224,7 +235,11 @@ async function runTests() {
     allMatchItems.forEach(({ playerId, items }) => {
       console.log(`   Player ${playerId}: ${items.length} items`);
       items.forEach((item, index) => {
-        console.log(`     ${index + 1}. ${item.name} (${item.type})`);
+        console.log(
+          `     ${index + 1}. ${item.name} (${item.type}) - ${item.value}/${
+            item.potentialScore
+          } points`
+        );
       });
     });
     console.log();

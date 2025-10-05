@@ -36,6 +36,7 @@ export interface InventoryItem {
   name: string;
   description: string;
   value: number; // Points when dropped off
+  potentialScore: number; // Maximum possible score from this item
   pickedUpAt: Date;
   location?: {
     lat: number;
