@@ -27,7 +27,7 @@ app.use((req, res, next) => {
     "https://127.0.0.1:5175",
     "https://127.0.0.1:8175",
     "http://127.0.0.1:8175",
-
+    "https://172.20.208.1:8175", // Your frontend origin
     "*", // Allow all origins in development
   ];
 
@@ -44,10 +44,10 @@ app.use((req, res, next) => {
   // Allow specific methods
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
 
-  // Allow specific headers
+  // Allow specific headers (including ngrok headers)
   res.header(
     "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization, ngrok-skip-browser-warning"
   );
 
   // Allow credentials

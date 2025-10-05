@@ -1,0 +1,303 @@
+{
+  "backend_api_summary": {
+    "version": "1.0.0",
+    "description": "Complete backend API functionality for match management, player rejoin, and restart capabilities",
+    "last_updated": "2025-01-27",
+
+    "core_features": {
+      "match_lifecycle": {
+        "description": "Complete match management from creation to restart",
+        "states": ["waiting", "active", "paused", "ended"],
+        "transitions": {
+          "waiting": ["active"],
+          "active": ["paused", "ended"],
+          "paused": ["active", "ended"],
+          "ended": ["active"]
+        }
+      },
+
+      "player_management": {
+        "description": "Flexible player joining and rejoin system",
+        "new_player_joining": {
+          "allowed_states": ["waiting", "ended"],
+          "blocked_states": ["active", "paused"]
+        },
+        "player_rejoin": {
+          "allowed_states": ["waiting", "active", "paused", "ended"],
+          "description": "Players can rejoin at ANY time using their original QR codes"
+        }
+      },
+
+      "score_management": {
+        "description": "Player scoring and restart functionality",
+        "score_persistence": "Player scores persist across rejoins",
+        "score_reset": "All player scores reset to 0 when admin restarts match",
+        "fields_reset": ["score", "shots", "inventory", "scoreHistory"]
+      }
+    },
+
+    "api_endpoints": {
+      "match_creation": {
+        "endpoint": "POST /api/match/create",
+        "body": { "adminName": "string" },
+        "response": {
+          "matchId": "string",
+          "adminId": "string",
+          "adminName": "string",
+          "createdAt": "ISO string"
+        }
+      },
+
+      "player_join": {
+        "endpoint": "POST /api/match/:matchId/join",
+        "body": { "playerName": "string" },
+        "responses": {
+          "new_player": {
+            "status": 201,
+            "body": {
+              "success": true,
+              "message": "Successfully joined match",
+              "player": {
+                "id": "string",
+                "name": "string",
+                "qrCode": "string",
+                "qrCodeBase64": "string",
+                "matchId": "string",
+                "role": "player",
+                "score": 0,
+                "shots": 0,
+                "inventory": [],
+                "scoreHistory": []
+              }
+            }
+          },
+          "existing_player_rejoin": {
+            "status": 200,
+            "body": {
+              "success": true,
+              "message": "Successfully rejoined match",
+              "player": {
+                "id": "string",
+                "name": "string",
+                "qrCode": "string (same as original)",
+                "qrCodeBase64": "string (same as original)",
+                "matchId": "string",
+                "role": "player",
+                "score": "number (preserved)",
+                "shots": "number (preserved)",
+                "inventory": "array (preserved)",
+                "scoreHistory": "array (preserved)"
+              }
+            }
+          }
+        }
+      },
+
+      "match_control": {
+        "start_match": {
+          "endpoint": "POST /api/match/:matchId/start",
+          "body": { "adminId": "string" },
+          "description": "Starts match from waiting or ended state. Resets all player scores if restarting from ended."
+        },
+        "pause_match": {
+          "endpoint": "POST /api/match/:matchId/pause",
+          "body": { "adminId": "string" }
+        },
+        "resume_match": {
+          "endpoint": "POST /api/match/:matchId/resume",
+          "body": { "adminId": "string" }
+        },
+        "end_match": {
+          "endpoint": "POST /api/match/:matchId/end",
+          "body": { "adminId": "string" }
+        }
+      },
+
+      "match_info": {
+        "match_details": {
+          "endpoint": "GET /api/match/:matchId",
+          "response": {
+            "id": "string",
+            "state": "string",
+            "adminId": "string",
+            "players": "array",
+            "totalPlayers": "number",
+            "createdAt": "ISO string",
+            "startedAt": "ISO string or null",
+            "endedAt": "ISO string or null"
+          }
+        },
+        "match_players": {
+          "endpoint": "GET /api/match/:matchId/players",
+          "response": {
+            "matchId": "string",
+            "players": "array of player objects",
+            "totalPlayers": "number",
+            "adminId": "string"
+          }
+        },
+        "match_leaderboard": {
+          "endpoint": "GET /api/match/:matchId/leaderboard",
+          "response": {
+            "matchId": "string",
+            "leaderboard": "array of leaderboard entries",
+            "totalPlayers": "number",
+            "adminId": "string"
+          }
+        }
+      }
+    },
+
+    "test_scenarios": {
+      "test_rejoin_and_restart": {
+        "description": "Comprehensive test for player rejoin and match restart functionality",
+        "scenarios": [
+          "Create match and join players",
+          "Start match and simulate scoring",
+          "Players rejoin during active match (preserves scores)",
+          "End match",
+          "Admin restarts match (resets all scores to 0)",
+          "Players rejoin after restart (scores reset, QR codes still work)"
+        ],
+        "key_verifications": [
+          "Players can rejoin at ANY time using QR codes",
+          "QR codes remain valid across match restarts",
+          "Admin restart resets all player scores to 0",
+          "Players can continue with same QR codes after restart",
+          "No need to print new QR codes"
+        ]
+      },
+
+      "test_persistent_matches": {
+        "description": "Test for persistent match data across server restarts",
+        "scenarios": [
+          "Create match with admin and players",
+          "Add inventory items and score history",
+          "Simulate server restart (clear in-memory data)",
+          "Load matches from database",
+          "Verify player data preservation",
+          "Test player rejoin functionality"
+        ],
+        "key_verifications": [
+          "Match data persists across server restarts",
+          "Player inventory and scores are preserved",
+          "Players can rejoin using same names",
+          "All data loads correctly from database"
+        ]
+      },
+
+      "test_match_states": {
+        "description": "Test player joining behavior across different match states",
+        "scenarios": [
+          "Create match and start it",
+          "Try to join new player after match started (should fail)",
+          "Try to rejoin existing player after match started (should work)",
+          "Pause match and test joining",
+          "End match and test joining",
+          "Restart match and test joining"
+        ],
+        "key_verifications": [
+          "New players can ONLY join when match is in 'waiting' or 'ended' state",
+          "Existing players can rejoin at ANY time (any state)",
+          "This prevents new players from joining mid-game"
+        ]
+      },
+
+      "test_match_restart": {
+        "description": "Test complete match restart cycle",
+        "scenarios": [
+          "Create match and start it",
+          "End the match",
+          "Add new players (should work)",
+          "Start the match again (should work)",
+          "Verify restart functionality"
+        ],
+        "key_verifications": [
+          "Admin can end a match",
+          "New players can join after match ends",
+          "Admin can start the match again",
+          "Match goes through complete lifecycle: waiting → active → ended → active"
+        ]
+      }
+    },
+
+    "player_data_structure": {
+      "player_object": {
+        "id": "string (unique player ID)",
+        "name": "string (player name)",
+        "qrCode": "string (JSON string for QR scanning)",
+        "qrCodeBase64": "string (base64 encoded QR image)",
+        "matchId": "string (match ID)",
+        "role": "string (admin or player)",
+        "score": "number (current score)",
+        "shots": "number (total shots taken)",
+        "inventory": "array (inventory items)",
+        "scoreHistory": "array (score history entries)",
+        "state": "string (connected, disconnected)",
+        "isActive": "boolean",
+        "joinedAt": "ISO string"
+      },
+
+      "inventory_item": {
+        "id": "string",
+        "type": "string (plastic_bottle, can, paper, etc.)",
+        "name": "string",
+        "description": "string",
+        "value": "number (points worth)",
+        "potentialScore": "number (max points possible)",
+        "pickedUpAt": "ISO string",
+        "location": {
+          "lat": "number",
+          "lng": "number"
+        },
+        "metadata": "object"
+      },
+
+      "score_entry": {
+        "id": "string",
+        "type": "string (shot_hit, item_dropoff, bonus, etc.)",
+        "points": "number",
+        "description": "string",
+        "timestamp": "ISO string",
+        "metadata": "object"
+      }
+    },
+
+    "match_lifecycle_flow": {
+      "description": "Complete match lifecycle with player management",
+      "flow": [
+        "1. Admin creates match → waiting state",
+        "2. Players join and get QR codes → waiting state",
+        "3. Admin starts match → active state",
+        "4. Players can leave and rejoin anytime → active state (using QR codes)",
+        "5. Admin can pause/resume → paused/active states",
+        "6. Admin ends match → ended state",
+        "7. New players can join for next round → ended state",
+        "8. Admin restarts match → active state (all scores reset to 0)",
+        "9. Players rejoin with same QR codes → active state (fresh start)",
+        "10. Cycle repeats..."
+      ]
+    },
+
+    "key_benefits": [
+      "Players can rejoin at ANY time using their QR codes",
+      "QR codes remain valid across match restarts",
+      "Admin restart resets all player scores to 0",
+      "Players can continue with same QR codes after restart",
+      "No need to print new QR codes",
+      "Flexible player management (join/leave/rejoin anytime)",
+      "Clean restarts for new rounds",
+      "Persistent player identity",
+      "Scalable match management"
+    ],
+
+    "frontend_integration_notes": {
+      "qr_code_handling": "QR codes are JSON strings that can be scanned to get matchId and playerId",
+      "player_rejoin": "Use same player name to rejoin existing players",
+      "score_tracking": "Player scores persist across rejoins but reset on match restart",
+      "match_states": "Check match state before allowing new players to join",
+      "admin_controls": "Admin can start, pause, resume, and end matches",
+      "restart_functionality": "Admin can restart matches to reset all scores for new rounds"
+    }
+  }
+}

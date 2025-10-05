@@ -51,7 +51,10 @@ const parseArray = (
   return value.split(",").map((item) => item.trim());
 };
 
-const parseBoolean = (value: string | undefined, fallback: boolean): boolean => {
+const parseBoolean = (
+  value: string | undefined,
+  fallback: boolean
+): boolean => {
   if (value === undefined || value === null) {
     return fallback;
   }
@@ -65,7 +68,9 @@ export const config: AppConfig = {
   https: {
     enabled: parseBoolean(process.env.HTTPS_ENABLED, true), // Default to true for development
     port: parseNumber(process.env.HTTPS_PORT, 9443), // Default HTTPS port
-    ...(process.env.HTTPS_CERT_PATH && { certPath: process.env.HTTPS_CERT_PATH }),
+    ...(process.env.HTTPS_CERT_PATH && {
+      certPath: process.env.HTTPS_CERT_PATH,
+    }),
     ...(process.env.HTTPS_KEY_PATH && { keyPath: process.env.HTTPS_KEY_PATH }),
   },
   firebase: {
