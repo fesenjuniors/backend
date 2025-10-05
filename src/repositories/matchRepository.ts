@@ -4,7 +4,7 @@
  */
 
 import { getDb, isFirebaseAvailable } from "../config/firebase";
-import type { Match, Player } from "../types/game";
+import type { Match, Player, InventoryItem, ScoreEntry } from "../types/game";
 
 export class MatchRepository {
   private readonly COLLECTION = "matches";
@@ -39,6 +39,8 @@ export class MatchRepository {
           state: player.state,
           joinedAt: player.joinedAt,
           isActive: player.isActive,
+          inventory: player.inventory || [],
+          scoreHistory: player.scoreHistory || [],
         })),
       };
 
@@ -105,6 +107,8 @@ export class MatchRepository {
         state: player.state,
         joinedAt: player.joinedAt,
         isActive: player.isActive,
+        inventory: player.inventory || [],
+        scoreHistory: player.scoreHistory || [],
       };
 
       await db
@@ -203,6 +207,51 @@ export class MatchRepository {
       console.log(`Player ${playerId} removed from Firebase`);
     } catch (error) {
       console.error("Error removing player from Firebase:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update player's inventory and score history
+   */
+  async updatePlayerData(
+    matchId: string,
+    playerId: string,
+    updates: {
+      inventory?: InventoryItem[];
+      scoreHistory?: ScoreEntry[];
+      score?: number;
+    }
+  ): Promise<void> {
+    if (!isFirebaseAvailable()) {
+      console.log(`[DEV] Would update player ${playerId} data`);
+      return;
+    }
+
+    try {
+      const db = getDb();
+      const updateData: any = {};
+
+      if (updates.inventory !== undefined) {
+        updateData.inventory = updates.inventory;
+      }
+      if (updates.scoreHistory !== undefined) {
+        updateData.scoreHistory = updates.scoreHistory;
+      }
+      if (updates.score !== undefined) {
+        updateData.score = updates.score;
+      }
+
+      await db
+        .collection(this.COLLECTION)
+        .doc(matchId)
+        .collection("players")
+        .doc(playerId)
+        .update(updateData);
+
+      console.log(`Player ${playerId} data updated`);
+    } catch (error) {
+      console.error("Error updating player data:", error);
       throw error;
     }
   }
