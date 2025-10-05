@@ -94,13 +94,16 @@ router.get("/api/match/:matchId", (req: Request, res: Response) => {
     score: player.score,
     shots: player.shots,
     state: player.state,
+    role: player.role,
     joinedAt: player.joinedAt.toISOString(),
   }));
 
   res.status(200).json({
     id: match.id,
     state: match.state,
+    adminId: match.adminId,
     players,
+    totalPlayers: players.length,
     createdAt: match.createdAt.toISOString(),
     startedAt: match.startedAt?.toISOString(),
     endedAt: match.endedAt?.toISOString(),
@@ -226,6 +229,8 @@ router.get("/api/match/:matchId/leaderboard", (req: Request, res: Response) => {
   res.status(200).json({
     matchId,
     leaderboard,
+    totalPlayers: leaderboard.length,
+    adminId: match.adminId,
   });
 });
 
@@ -269,7 +274,11 @@ router.post(
       });
     }
 
-    const player = await matchManager.addPlayer(matchId, playerName.trim(), playerId);
+    const player = await matchManager.addPlayer(
+      matchId,
+      playerName.trim(),
+      playerId
+    );
     if (!player) {
       // Check if it's a duplicate name error
       const match = matchManager.getMatch(matchId);
@@ -399,8 +408,8 @@ router.post("/api/match/:matchId/resume", (req: Request, res: Response) => {
 });
 
 /**
- * Get all QR codes for a match (for reprinting)
- * GET /api/match/:matchId/qrcodes
+ * Get all players for a match with detailed information
+ * GET /api/match/:matchId/players
  */
 router.get(
   "/api/match/:matchId/players",
@@ -408,14 +417,33 @@ router.get(
     const matchId = req.params.matchId as string;
 
     try {
-      const qrCodes = await matchManager.getAllQrCodes(matchId);
+      const match = matchManager.getMatch(matchId);
+      if (!match) {
+        return res.status(404).json({ error: "Match not found" });
+      }
+
+      const players = Array.from(match.players.values()).map((player) => ({
+        id: player.id,
+        name: player.name,
+        score: player.score,
+        shots: player.shots,
+        state: player.state,
+        role: player.role,
+        isActive: player.isActive,
+        joinedAt: player.joinedAt.toISOString(),
+        inventory: player.inventory,
+        scoreHistory: player.scoreHistory,
+      }));
+
       res.status(200).json({
         matchId,
-        qrCodes,
+        players,
+        totalPlayers: players.length,
+        adminId: match.adminId,
       });
     } catch (error) {
-      console.error("Error fetching QR codes:", error);
-      res.status(500).json({ error: "Failed to fetch QR codes" });
+      console.error("Error fetching players:", error);
+      res.status(500).json({ error: "Failed to fetch players" });
     }
   }
 );
