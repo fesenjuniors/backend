@@ -283,9 +283,32 @@ class MatchManager {
       return false;
     }
 
+    // Check if this is a restart from "ended" state
+    const isRestart = match.state === "ended";
+
     match.state = "active";
     match.startedAt = new Date();
     console.log(`Match ${matchId} started with ${match.players.size} players`);
+
+    // If restarting from "ended" state, reset all player scores
+    if (isRestart) {
+      console.log(`Resetting all player scores for match restart`);
+      for (const player of match.players.values()) {
+        player.score = 0;
+        player.shots = 0;
+        player.inventory = [];
+        player.scoreHistory = [];
+        console.log(`Reset player ${player.name}: score=0, shots=0`);
+
+        // Update player in Firebase
+        matchRepository.savePlayer(matchId, player).catch((err) => {
+          console.error(
+            `Failed to reset player ${player.id} in Firebase:`,
+            err
+          );
+        });
+      }
+    }
 
     // Update Firebase
     matchRepository
