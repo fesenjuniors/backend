@@ -4,6 +4,7 @@
  */
 
 import { getDb, isFirebaseAvailable } from "../config/firebase";
+import { FieldValue } from "firebase-admin/firestore";
 import type { InventoryItem, ScoreEntry, Player } from "../types/game";
 
 export class InventoryRepository {
@@ -27,17 +28,15 @@ export class InventoryRepository {
 
     try {
       const db = getDb();
-      await db
-        .collection(this.COLLECTION)
+      const playerRef = db
+        .collection("matches")
         .doc(matchId)
         .collection("players")
-        .doc(playerId)
-        .collection("items")
-        .doc(item.id)
-        .set({
-          ...item,
-          pickedUpAt: item.pickedUpAt,
-        });
+        .doc(playerId);
+
+      await playerRef.update({
+        inventory: FieldValue.arrayUnion(item),
+      });
 
       console.log(`Item ${item.id} added to player ${playerId} inventory`);
     } catch (error) {
@@ -63,14 +62,23 @@ export class InventoryRepository {
 
     try {
       const db = getDb();
-      await db
-        .collection(this.COLLECTION)
+      const playerRef = db
+        .collection("matches")
         .doc(matchId)
         .collection("players")
-        .doc(playerId)
-        .collection("items")
-        .doc(itemId)
-        .delete();
+        .doc(playerId);
+
+      // Get current inventory, filter out the item, then update
+      const playerDoc = await playerRef.get();
+      const currentInventory: InventoryItem[] =
+        playerDoc.data()?.inventory || [];
+      const updatedInventory = currentInventory.filter(
+        (item) => item.id !== itemId
+      );
+
+      await playerRef.update({
+        inventory: updatedInventory,
+      });
 
       console.log(`Item ${itemId} removed from player ${playerId} inventory`);
     } catch (error) {
@@ -93,32 +101,23 @@ export class InventoryRepository {
 
     try {
       const db = getDb();
-      const snapshot = await db
-        .collection(this.COLLECTION)
+      const playerDoc = await db
+        .collection("matches")
         .doc(matchId)
         .collection("players")
         .doc(playerId)
-        .collection("items")
-        .orderBy("pickedUpAt", "desc")
         .get();
 
-      const items: InventoryItem[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        items.push({
-          id: data.id,
-          type: data.type,
-          name: data.name,
-          description: data.description,
-          value: data.value,
-          potentialScore: data.potentialScore || data.value, // Fallback to value if potentialScore not set
-          pickedUpAt: data.pickedUpAt.toDate(),
-          location: data.location,
-          metadata: data.metadata,
-        });
-      });
+      const inventory: InventoryItem[] = playerDoc.data()?.inventory || [];
 
-      return items;
+      // Convert Firestore timestamps to Date objects
+      return inventory.map((item) => ({
+        ...item,
+        pickedUpAt:
+          item.pickedUpAt instanceof Date
+            ? item.pickedUpAt
+            : (item.pickedUpAt as any).toDate(),
+      }));
     } catch (error) {
       console.error("Error fetching player inventory:", error);
       throw error;
@@ -142,17 +141,16 @@ export class InventoryRepository {
 
     try {
       const db = getDb();
-      await db
-        .collection(this.SCORES_COLLECTION)
+      const playerRef = db
+        .collection("matches")
         .doc(matchId)
         .collection("players")
-        .doc(playerId)
-        .collection("scores")
-        .doc(scoreEntry.id)
-        .set({
-          ...scoreEntry,
-          timestamp: scoreEntry.timestamp,
-        });
+        .doc(playerId);
+
+      await playerRef.update({
+        scoreHistory: FieldValue.arrayUnion(scoreEntry),
+        score: FieldValue.increment(scoreEntry.points), // Increment total score
+      });
 
       console.log(`Score entry ${scoreEntry.id} added for player ${playerId}`);
     } catch (error) {
@@ -175,29 +173,23 @@ export class InventoryRepository {
 
     try {
       const db = getDb();
-      const snapshot = await db
-        .collection(this.SCORES_COLLECTION)
+      const playerDoc = await db
+        .collection("matches")
         .doc(matchId)
         .collection("players")
         .doc(playerId)
-        .collection("scores")
-        .orderBy("timestamp", "desc")
         .get();
 
-      const scores: ScoreEntry[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        scores.push({
-          id: data.id,
-          type: data.type,
-          points: data.points,
-          description: data.description,
-          timestamp: data.timestamp.toDate(),
-          metadata: data.metadata,
-        });
-      });
+      const scoreHistory: ScoreEntry[] = playerDoc.data()?.scoreHistory || [];
 
-      return scores;
+      // Convert Firestore timestamps to Date objects
+      return scoreHistory.map((score) => ({
+        ...score,
+        timestamp:
+          score.timestamp instanceof Date
+            ? score.timestamp
+            : (score.timestamp as any).toDate(),
+      }));
     } catch (error) {
       console.error("Error fetching player score history:", error);
       throw error;
@@ -250,7 +242,7 @@ export class InventoryRepository {
     try {
       const db = getDb();
       const playersSnapshot = await db
-        .collection(this.COLLECTION)
+        .collection("matches")
         .doc(matchId)
         .collection("players")
         .get();
@@ -259,26 +251,17 @@ export class InventoryRepository {
 
       for (const playerDoc of playersSnapshot.docs) {
         const playerId = playerDoc.id;
-        const itemsSnapshot = await playerDoc.ref
-          .collection("items")
-          .orderBy("pickedUpAt", "desc")
-          .get();
+        const playerData = playerDoc.data();
+        const inventory: InventoryItem[] = playerData?.inventory || [];
 
-        const items: InventoryItem[] = [];
-        itemsSnapshot.forEach((itemDoc) => {
-          const data = itemDoc.data();
-          items.push({
-            id: data.id,
-            type: data.type,
-            name: data.name,
-            description: data.description,
-            value: data.value,
-            potentialScore: data.potentialScore || data.value, // Fallback to value if potentialScore not set
-            pickedUpAt: data.pickedUpAt.toDate(),
-            location: data.location,
-            metadata: data.metadata,
-          });
-        });
+        // Convert Firestore timestamps to Date objects
+        const items = inventory.map((item) => ({
+          ...item,
+          pickedUpAt:
+            item.pickedUpAt instanceof Date
+              ? item.pickedUpAt
+              : (item.pickedUpAt as any).toDate(),
+        }));
 
         result.push({ playerId, items });
       }
@@ -302,33 +285,25 @@ export class InventoryRepository {
     try {
       const db = getDb();
 
-      // Clear inventory items
-      const inventoryRef = db.collection(this.COLLECTION).doc(matchId);
-      const playersSnapshot = await inventoryRef.collection("players").get();
+      // Get all players in the match
+      const playersSnapshot = await db
+        .collection("matches")
+        .doc(matchId)
+        .collection("players")
+        .get();
 
       const batch = db.batch();
+
+      // Clear inventory and score history for each player
       for (const playerDoc of playersSnapshot.docs) {
-        const itemsSnapshot = await playerDoc.ref.collection("items").get();
-        itemsSnapshot.forEach((itemDoc) => {
-          batch.delete(itemDoc.ref);
+        batch.update(playerDoc.ref, {
+          inventory: [],
+          scoreHistory: [],
+          score: 0,
         });
-        batch.delete(playerDoc.ref);
       }
+
       await batch.commit();
-
-      // Clear score history
-      const scoresRef = db.collection(this.SCORES_COLLECTION).doc(matchId);
-      const scoresPlayersSnapshot = await scoresRef.collection("players").get();
-
-      const scoresBatch = db.batch();
-      for (const playerDoc of scoresPlayersSnapshot.docs) {
-        const scoresSnapshot = await playerDoc.ref.collection("scores").get();
-        scoresSnapshot.forEach((scoreDoc) => {
-          scoresBatch.delete(scoreDoc.ref);
-        });
-        scoresBatch.delete(playerDoc.ref);
-      }
-      await scoresBatch.commit();
 
       console.log(`Inventory and scores cleared for match ${matchId}`);
     } catch (error) {

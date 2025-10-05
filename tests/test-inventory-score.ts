@@ -13,6 +13,13 @@
  */
 
 import { randomBytes } from "crypto";
+import { config as loadEnv } from "dotenv";
+
+// Load environment variables first
+console.log("📁 Loading environment variables...");
+loadEnv();
+console.log("✅ Environment variables loaded");
+
 import { initializeFirebase } from "../src/config/firebase";
 import { matchManager } from "../src/services/matchManager";
 import { inventoryRepository } from "../src/repositories/inventoryRepository";
@@ -24,8 +31,26 @@ import type {
   ScoreType,
 } from "../src/types/game";
 
-// Initialize Firebase
+// Initialize Firebase with debugging
+console.log("🔧 Initializing Firebase...");
+console.log("Environment variables check:");
+console.log(
+  "  GOOGLE_APPLICATION_CREDENTIALS:",
+  process.env.GOOGLE_APPLICATION_CREDENTIALS
+);
+console.log("  FIREBASE_PROJECT_ID:", process.env.FIREBASE_PROJECT_ID);
+console.log("  FIREBASE_CLIENT_EMAIL:", process.env.FIREBASE_CLIENT_EMAIL);
+console.log(
+  "  FIREBASE_PRIVATE_KEY:",
+  process.env.FIREBASE_PRIVATE_KEY ? "***SET***" : "NOT SET"
+);
+
 initializeFirebase();
+
+// Check Firebase availability after initialization
+import { isFirebaseAvailable } from "../src/config/firebase";
+console.log("🔍 Firebase availability check:");
+console.log("  isFirebaseAvailable():", isFirebaseAvailable());
 
 // Test data
 const TEST_MATCH_ID = `test_match_${randomBytes(4).toString("hex")}`;
@@ -95,7 +120,12 @@ async function runTests() {
     if (!player) {
       throw new Error("Failed to add player");
     }
-    console.log(`✅ Player added: ${player.id} (${player.name})\n`);
+    console.log(`✅ Player added: ${player.id} (${player.name})`);
+
+    // Wait a moment for the player to be saved to the database
+    console.log("⏳ Waiting for player to be saved to database...");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    console.log("✅ Player should now be saved to database\n");
 
     // Test 3: Add items to player inventory
     console.log("3️⃣ Adding items to player inventory...");
@@ -261,15 +291,19 @@ async function runTests() {
     }
     console.log();
 
-    // Test 12: Cleanup test data
-    console.log("1️⃣2️⃣ Cleaning up test data...");
-    await inventoryRepository.clearMatchInventory(match.id);
-    console.log(`✅ Cleared inventory and score data for match ${match.id}`);
+    // Test 12: Cleanup test data (COMMENTED OUT FOR DEBUGGING)
+    console.log("1️⃣2️⃣ Skipping cleanup to preserve test data in database...");
+    // await inventoryRepository.clearMatchInventory(match.id);
+    // console.log(`✅ Cleared inventory and score data for match ${match.id}`);
 
-    // Remove the test match
-    await matchRepository.removePlayer(match.id, match.adminId);
-    await matchRepository.removePlayer(match.id, player.id);
-    console.log(`✅ Removed test players from match`);
+    // Remove the test match (COMMENTED OUT FOR DEBUGGING)
+    // await matchRepository.removePlayer(match.id, match.adminId);
+    // await matchRepository.removePlayer(match.id, player.id);
+    // console.log(`✅ Removed test players from match`);
+    console.log(`🔍 Test data preserved in database for inspection:`);
+    console.log(`   Match ID: ${match.id}`);
+    console.log(`   Admin ID: ${match.adminId}`);
+    console.log(`   Player ID: ${player.id}`);
     console.log();
 
     console.log("🎉 All tests completed successfully!");
@@ -281,17 +315,17 @@ async function runTests() {
     console.log(`   ✅ Simulated item dropoff`);
     console.log(`   ✅ Updated player scores`);
     console.log(`   ✅ Verified database operations`);
-    console.log(`   ✅ Cleaned up test data`);
+    console.log(`   ✅ Preserved test data in database for inspection`);
   } catch (error) {
     console.error("❌ Test failed:", error);
-    console.log("\n🧹 Attempting cleanup...");
+    console.log("\n🧹 Skipping cleanup to preserve test data for debugging...");
 
-    try {
-      await inventoryRepository.clearMatchInventory(TEST_MATCH_ID);
-      console.log("✅ Cleanup completed");
-    } catch (cleanupError) {
-      console.error("❌ Cleanup failed:", cleanupError);
-    }
+    // try {
+    //   await inventoryRepository.clearMatchInventory(TEST_MATCH_ID);
+    //   console.log("✅ Cleanup completed");
+    // } catch (cleanupError) {
+    //   console.error("❌ Cleanup failed:", cleanupError);
+    // }
 
     process.exit(1);
   }
