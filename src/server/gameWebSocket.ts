@@ -26,7 +26,7 @@ import { scanQRFromBase64 } from "../utils/qr-base64-scanner";
 export const setupGameWebSocketHandlers = (
   wsManager: WebSocketManager
 ): void => {
-  wsManager.on("message", (clientId, data, ws) => {
+  wsManager.on("message", async (clientId, data, ws) => {
     try {
       // Validate WebSocket connection is still open
       if (ws.readyState !== ws.OPEN) {
@@ -64,11 +64,11 @@ export const setupGameWebSocketHandlers = (
       // Route message to appropriate handler
       switch (message.type) {
         case "player:connect":
-          handlePlayerConnect(message.data, ws, wsManager);
+          await handlePlayerConnect(message.data, ws, wsManager);
           break;
 
         case "player:disconnect":
-          handlePlayerDisconnect(message.data, wsManager);
+          await handlePlayerDisconnect(message.data, wsManager);
           break;
 
         case "shot:attempt":
@@ -124,11 +124,11 @@ function sendError(ws: WebSocket, message: string): void {
 /**
  * Handle player:connect event
  */
-function handlePlayerConnect(
+async function handlePlayerConnect(
   payload: PlayerConnectPayload,
   ws: WebSocket,
   wsManager: WebSocketManager
-): void {
+): Promise<void> {
   const { matchId, playerId } = payload;
 
   console.log(`Player ${playerId} connecting to match ${matchId}`);
@@ -139,7 +139,7 @@ function handlePlayerConnect(
     // Try to load match from database
     matchManager
       .loadMatchFromDatabase(matchId)
-      .then((loadedMatch) => {
+      .then(async (loadedMatch) => {
         if (!loadedMatch) {
           ws.send(
             JSON.stringify({
@@ -151,7 +151,7 @@ function handlePlayerConnect(
         }
 
         // Retry connection with loaded match
-        handlePlayerConnect(payload, ws, wsManager);
+        await handlePlayerConnect(payload, ws, wsManager);
       })
       .catch((error) => {
         console.error("Error loading match from database:", error);
@@ -165,7 +165,7 @@ function handlePlayerConnect(
     return;
   }
 
-  const player = matchManager.getPlayer(matchId, playerId);
+  const player = await matchManager.getPlayer(matchId, playerId);
   if (!player) {
     ws.send(
       JSON.stringify({
@@ -177,18 +177,12 @@ function handlePlayerConnect(
   }
 
   // Update player state to connected
-  matchManager.updatePlayerState(matchId, playerId, "connected");
+  await matchManager.updatePlayerState(matchId, playerId, "connected");
 
   // Send current match state to the connecting player
   const matchStatePayload: MatchStatePayload = {
     matchId,
     state: match.state,
-    players: Array.from(match.players.values()).map((p) => ({
-      id: p.id,
-      name: p.name,
-      score: p.score,
-      state: p.state,
-    })),
   };
 
   ws.send(
@@ -235,16 +229,16 @@ function handlePlayerConnect(
 /**
  * Handle player:disconnect event
  */
-function handlePlayerDisconnect(
+async function handlePlayerDisconnect(
   payload: PlayerDisconnectPayload,
   wsManager: WebSocketManager
-): void {
+): Promise<void> {
   const { matchId, playerId } = payload;
 
   console.log(`Player ${playerId} disconnecting from match ${matchId}`);
 
   // Update player state to disconnected
-  const success = matchManager.updatePlayerState(
+  const success = await matchManager.updatePlayerState(
     matchId,
     playerId,
     "disconnected"
@@ -375,7 +369,7 @@ async function handleAdminAction(
 
   switch (action) {
     case "start":
-      success = matchManager.startMatch(matchId, adminId);
+      success = await matchManager.startMatch(matchId, adminId);
       if (success) {
         broadcastEvent = "match:started";
         broadcastData = {
@@ -464,11 +458,11 @@ async function handleAdminAction(
  * Broadcast leaderboard update to all clients
  * This function should be called after score changes
  */
-export function broadcastLeaderboardUpdate(
+export async function broadcastLeaderboardUpdate(
   matchId: string,
   wsManager: WebSocketManager
-): void {
-  const leaderboard = matchManager.getLeaderboard(matchId);
+): Promise<void> {
+  const leaderboard = await matchManager.getLeaderboard(matchId);
 
   const payload: LeaderboardUpdatePayload = {
     matchId,

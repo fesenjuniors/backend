@@ -19,7 +19,7 @@ const router = Router();
  * Create a new match with admin
  * POST /api/match/create
  */
-router.post("/api/match/create", (req: Request, res: Response) => {
+router.post("/api/match/create", async (req: Request, res: Response) => {
   try {
     // Validate request body exists
     if (!req.body || typeof req.body !== "object") {
@@ -62,10 +62,13 @@ router.post("/api/match/create", (req: Request, res: Response) => {
 
     const match = matchManager.createMatch(adminName.trim());
 
+    // Get admin name from sub-collection
+    const adminPlayer = await matchManager.getPlayer(match.id, match.adminId);
+
     res.status(201).json({
       matchId: match.id,
       adminId: match.adminId,
-      adminName: match.players.get(match.adminId)?.name || adminName.trim(),
+      adminName: adminPlayer?.name || adminName.trim(),
       createdAt: match.createdAt.toISOString(),
     });
   } catch (error) {
@@ -83,7 +86,7 @@ router.post("/api/match/create", (req: Request, res: Response) => {
  * Get match details
  * GET /api/match/:matchId
  */
-router.get("/api/match/:matchId", (req: Request, res: Response) => {
+router.get("/api/match/:matchId", async (req: Request, res: Response) => {
   const matchId = req.params.matchId as string;
 
   const match = matchManager.getMatch(matchId);
@@ -92,26 +95,32 @@ router.get("/api/match/:matchId", (req: Request, res: Response) => {
     return;
   }
 
-  const players = Array.from(match.players.values()).map((player) => ({
-    id: player.id,
-    name: player.name,
-    score: player.score,
-    shots: player.shots,
-    state: player.state,
-    role: player.role,
-    joinedAt: player.joinedAt.toISOString(),
-  }));
+  try {
+    const players = await matchManager.getPlayers(matchId);
+    const playerData = players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      score: player.score,
+      shots: player.shots,
+      state: player.state,
+      role: player.role,
+      joinedAt: player.joinedAt.toISOString(),
+    }));
 
-  res.status(200).json({
-    id: match.id,
-    state: match.state,
-    adminId: match.adminId,
-    players,
-    totalPlayers: players.length,
-    createdAt: match.createdAt.toISOString(),
-    startedAt: match.startedAt?.toISOString(),
-    endedAt: match.endedAt?.toISOString(),
-  });
+    res.status(200).json({
+      id: match.id,
+      state: match.state,
+      adminId: match.adminId,
+      players: playerData,
+      totalPlayers: playerData.length,
+      createdAt: match.createdAt.toISOString(),
+      startedAt: match.startedAt?.toISOString(),
+      endedAt: match.endedAt?.toISOString(),
+    });
+  } catch (error) {
+    console.error("Error getting match details:", error);
+    res.status(500).json({ error: "Failed to get match details" });
+  }
 });
 
 /**
@@ -167,7 +176,7 @@ router.post("/api/match/:matchId/start", (req: Request, res: Response) => {
  * End a match
  * POST /api/match/:matchId/end
  */
-router.post("/api/match/:matchId/end", (req: Request, res: Response) => {
+router.post("/api/match/:matchId/end", async (req: Request, res: Response) => {
   const matchId = req.params.matchId as string;
 
   const match = matchManager.getMatch(matchId);
@@ -191,7 +200,7 @@ router.post("/api/match/:matchId/end", (req: Request, res: Response) => {
     return;
   }
 
-  const winner = matchManager.getWinner(matchId);
+  const winner = await matchManager.getWinner(matchId);
 
   // Broadcast match ended event
   const payload: MatchEndedPayload = {
@@ -219,24 +228,32 @@ router.post("/api/match/:matchId/end", (req: Request, res: Response) => {
  * Get match leaderboard
  * GET /api/match/:matchId/leaderboard
  */
-router.get("/api/match/:matchId/leaderboard", (req: Request, res: Response) => {
-  const matchId = req.params.matchId as string;
+router.get(
+  "/api/match/:matchId/leaderboard",
+  async (req: Request, res: Response) => {
+    const matchId = req.params.matchId as string;
 
-  const match = matchManager.getMatch(matchId);
-  if (!match) {
-    res.status(404).json({ error: "Match not found" });
-    return;
+    const match = matchManager.getMatch(matchId);
+    if (!match) {
+      res.status(404).json({ error: "Match not found" });
+      return;
+    }
+
+    try {
+      const leaderboard = await matchManager.getLeaderboard(matchId);
+
+      res.status(200).json({
+        matchId,
+        leaderboard,
+        totalPlayers: leaderboard.length,
+        adminId: match.adminId,
+      });
+    } catch (error) {
+      console.error("Error getting leaderboard:", error);
+      res.status(500).json({ error: "Failed to get leaderboard" });
+    }
   }
-
-  const leaderboard = matchManager.getLeaderboard(matchId);
-
-  res.status(200).json({
-    matchId,
-    leaderboard,
-    totalPlayers: leaderboard.length,
-    adminId: match.adminId,
-  });
-});
+);
 
 /**
  * Join a match
@@ -287,20 +304,17 @@ router.post(
       console.log(`Match ${matchId} loaded from database`);
     }
 
-    // Check if player already exists (for rejoin)
-    const existingPlayer = Array.from(match.players.values()).find(
+    // Check if player already exists (for rejoin) from sub-collection
+    const players = await matchManager.getPlayers(matchId);
+    const existingPlayer = players.find(
       (p) => p.name.toLowerCase() === playerName.trim().toLowerCase()
     );
 
     console.log(
       `Looking for existing player "${playerName}" in match ${matchId}`
     );
-    console.log(`Match has ${match.players.size} players`);
-    console.log(
-      `Player names: ${Array.from(match.players.values())
-        .map((p) => p.name)
-        .join(", ")}`
-    );
+    console.log(`Match has ${players.length} players`);
+    console.log(`Player names: ${players.map((p) => p.name).join(", ")}`);
 
     let player: Player | null = null;
     let isRejoin = false;
@@ -469,7 +483,8 @@ router.get(
         return res.status(404).json({ error: "Match not found" });
       }
 
-      const players = Array.from(match.players.values()).map((player) => ({
+      const players = await matchManager.getPlayers(matchId);
+      const playerData = players.map((player) => ({
         id: player.id,
         name: player.name,
         score: player.score,
@@ -484,8 +499,8 @@ router.get(
 
       res.status(200).json({
         matchId,
-        players,
-        totalPlayers: players.length,
+        players: playerData,
+        totalPlayers: playerData.length,
         adminId: match.adminId,
       });
     } catch (error) {

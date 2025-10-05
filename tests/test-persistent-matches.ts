@@ -93,7 +93,8 @@ async function runPersistentMatchTests() {
     const match = matchManager.createMatch(TEST_ADMIN_NAME);
     console.log(`✅ Match created: ${match.id}`);
     console.log(`   Admin ID: ${match.adminId}`);
-    console.log(`   Admin Name: ${match.players.get(match.adminId)?.name}\n`);
+    const adminPlayer = await matchManager.getPlayer(match.id, match.adminId);
+    console.log(`   Admin Name: ${adminPlayer?.name}\n`);
 
     // Test 2: Add a player
     console.log("2️⃣ Adding test player...");
@@ -174,11 +175,15 @@ async function runPersistentMatchTests() {
     }
     console.log(`✅ Match loaded: ${loadedMatch.id}`);
     console.log(`   Admin ID: ${loadedMatch.adminId}`);
-    console.log(`   Players: ${loadedMatch.players.size}\n`);
+    const players = await matchManager.getPlayers(loadedMatch.id);
+    console.log(`   Players: ${players.length}\n`);
 
     // Test 9: Verify player data was preserved
     console.log("9️⃣ Verifying player data was preserved...");
-    const loadedPlayer = loadedMatch.players.get(player.id);
+    const loadedPlayer = await matchManager.getPlayer(
+      loadedMatch.id,
+      player.id
+    );
     if (!loadedPlayer) {
       throw new Error("Player not found after loading from database");
     }

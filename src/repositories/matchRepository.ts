@@ -4,13 +4,13 @@
  */
 
 import { getDb, isFirebaseAvailable } from "../config/firebase";
-import type { Match, Player, InventoryItem, ScoreEntry } from "../types/game";
+import type { Match, Player, Garbage, ScoreEntry } from "../types/game";
 
 export class MatchRepository {
   private readonly COLLECTION = "matches";
 
   /**
-   * Save match to Firebase
+   * Save match to Firebase (without players array - use subcollection only)
    */
   async saveMatch(match: Match): Promise<void> {
     if (!isFirebaseAvailable()) {
@@ -28,20 +28,7 @@ export class MatchRepository {
         startedAt: match.startedAt || null,
         endedAt: match.endedAt || null,
         pausedAt: match.pausedAt || null,
-        players: Array.from(match.players.values()).map((player) => ({
-          id: player.id,
-          name: player.name,
-          role: player.role,
-          qrCode: player.qrCode,
-          qrCodeBase64: player.qrCodeBase64,
-          score: player.score,
-          shots: player.shots,
-          state: player.state,
-          joinedAt: player.joinedAt,
-          isActive: player.isActive,
-          inventory: player.inventory || [],
-          scoreHistory: player.scoreHistory || [],
-        })),
+        // Players stored in subcollection only - no redundant array
       };
 
       await db.collection(this.COLLECTION).doc(match.id).set(matchData);
@@ -218,7 +205,7 @@ export class MatchRepository {
     matchId: string,
     playerId: string,
     updates: {
-      inventory?: InventoryItem[];
+      inventory?: Garbage[];
       scoreHistory?: ScoreEntry[];
       score?: number;
     }
@@ -281,32 +268,9 @@ export class MatchRepository {
           .collection("players")
           .get();
 
-        const players = new Map<string, Player>();
-        for (const playerDoc of playersSnapshot.docs) {
-          const playerData = playerDoc.data();
-          const player: Player = {
-            id: playerData.id,
-            name: playerData.name,
-            role: playerData.role,
-            qrCode: playerData.qrCode,
-            qrCodeBase64: playerData.qrCodeBase64,
-            score: playerData.score,
-            shots: playerData.shots,
-            state: playerData.state,
-            joinedAt: playerData.joinedAt
-              ? playerData.joinedAt.toDate()
-              : new Date(),
-            isActive: playerData.isActive,
-            inventory: playerData.inventory || [],
-            scoreHistory: playerData.scoreHistory || [],
-          };
-          players.set(playerData.id, player);
-        }
-
         const match: Match = {
           id: matchId,
           state: matchData.state,
-          players,
           adminId: matchData.adminId,
           createdAt: matchData.createdAt
             ? matchData.createdAt.toDate()
@@ -327,6 +291,105 @@ export class MatchRepository {
       return matches;
     } catch (error) {
       console.error("Error loading matches from Firebase:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all players for a match from sub-collection
+   */
+  async getPlayers(matchId: string): Promise<Player[]> {
+    if (!isFirebaseAvailable()) {
+      console.log(`[DEV] Would get players for match ${matchId} from Firebase`);
+      return [];
+    }
+
+    try {
+      const db = getDb();
+      const playersSnapshot = await db
+        .collection(this.COLLECTION)
+        .doc(matchId)
+        .collection("players")
+        .get();
+
+      const players: Player[] = [];
+      for (const playerDoc of playersSnapshot.docs) {
+        const playerData = playerDoc.data();
+        const player: Player = {
+          id: playerData.id,
+          name: playerData.name,
+          role: playerData.role,
+          qrCode: playerData.qrCode,
+          qrCodeBase64: playerData.qrCodeBase64,
+          score: playerData.score,
+          shots: playerData.shots,
+          state: playerData.state,
+          joinedAt: playerData.joinedAt
+            ? playerData.joinedAt.toDate()
+            : new Date(),
+          isActive: playerData.isActive,
+          inventory: playerData.inventory || [],
+          scoreHistory: playerData.scoreHistory || [],
+        };
+        players.push(player);
+      }
+
+      return players;
+    } catch (error) {
+      console.error("Error getting players from Firebase:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a specific player from sub-collection
+   */
+  async getPlayer(matchId: string, playerId: string): Promise<Player | null> {
+    if (!isFirebaseAvailable()) {
+      console.log(
+        `[DEV] Would get player ${playerId} from match ${matchId} from Firebase`
+      );
+      return null;
+    }
+
+    try {
+      const db = getDb();
+      const playerDoc = await db
+        .collection(this.COLLECTION)
+        .doc(matchId)
+        .collection("players")
+        .doc(playerId)
+        .get();
+
+      if (!playerDoc.exists) {
+        return null;
+      }
+
+      const playerData = playerDoc.data();
+      if (!playerData) {
+        return null;
+      }
+
+      const player: Player = {
+        id: playerData.id,
+        name: playerData.name,
+        role: playerData.role,
+        qrCode: playerData.qrCode,
+        qrCodeBase64: playerData.qrCodeBase64,
+        score: playerData.score,
+        shots: playerData.shots,
+        state: playerData.state,
+        joinedAt: playerData.joinedAt
+          ? playerData.joinedAt.toDate()
+          : new Date(),
+        isActive: playerData.isActive,
+        inventory: playerData.inventory || [],
+        scoreHistory: playerData.scoreHistory || [],
+      };
+
+      return player;
+    } catch (error) {
+      console.error("Error getting player from Firebase:", error);
       throw error;
     }
   }
@@ -353,39 +416,9 @@ export class MatchRepository {
         return null;
       }
 
-      // Load players for this match
-      const playersSnapshot = await db
-        .collection(this.COLLECTION)
-        .doc(matchId)
-        .collection("players")
-        .get();
-
-      const players = new Map<string, Player>();
-      for (const playerDoc of playersSnapshot.docs) {
-        const playerData = playerDoc.data();
-        const player: Player = {
-          id: playerData.id,
-          name: playerData.name,
-          role: playerData.role,
-          qrCode: playerData.qrCode,
-          qrCodeBase64: playerData.qrCodeBase64,
-          score: playerData.score,
-          shots: playerData.shots,
-          state: playerData.state,
-          joinedAt: playerData.joinedAt
-            ? playerData.joinedAt.toDate()
-            : new Date(),
-          isActive: playerData.isActive,
-          inventory: playerData.inventory || [],
-          scoreHistory: playerData.scoreHistory || [],
-        };
-        players.set(playerData.id, player);
-      }
-
       const match: Match = {
         id: matchId,
         state: matchData.state,
-        players,
         adminId: matchData.adminId,
         createdAt: matchData.createdAt
           ? matchData.createdAt.toDate()
