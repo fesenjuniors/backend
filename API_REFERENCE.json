@@ -1,0 +1,669 @@
+{
+  "api": {
+    "baseUrl": "http://localhost:8080",
+    "version": "1.0.0",
+    "description": "Complete API Reference for Stormhacks 2025 Backend"
+  },
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "description": "Health check endpoint",
+      "curl": "curl -X GET http://localhost:8080/health",
+      "response": {
+        "status": "ok"
+      },
+      "statusCode": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/match/create",
+      "description": "Create a new match with admin",
+      "curl": "curl -X POST http://localhost:8080/api/match/create -H \"Content-Type: application/json\" -d '{\"adminName\": \"GameMaster\"}'",
+      "requestBody": {
+        "adminName": "string (required, max 50 chars)"
+      },
+      "response": {
+        "matchId": "string",
+        "adminId": "string",
+        "adminName": "string",
+        "createdAt": "string (ISO 8601)"
+      },
+      "statusCode": 201
+    },
+    {
+      "method": "GET",
+      "path": "/api/match/{matchId}",
+      "description": "Get match details with players and roles",
+      "curl": "curl -X GET http://localhost:8080/api/match/match_abc123",
+      "pathParams": {
+        "matchId": "string (required)"
+      },
+      "response": {
+        "id": "string",
+        "state": "MatchState",
+        "adminId": "string",
+        "players": "Player[]",
+        "totalPlayers": "number",
+        "createdAt": "string (ISO 8601)",
+        "startedAt": "string (ISO 8601) | null",
+        "endedAt": "string (ISO 8601) | null"
+      },
+      "statusCode": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/match/{matchId}/players",
+      "description": "Get all players with detailed information including inventory",
+      "curl": "curl -X GET http://localhost:8080/api/match/match_abc123/players",
+      "pathParams": {
+        "matchId": "string (required)"
+      },
+      "response": {
+        "matchId": "string",
+        "players": "PlayerDetailed[]",
+        "totalPlayers": "number",
+        "adminId": "string"
+      },
+      "statusCode": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/match/{matchId}/join",
+      "description": "Join a match as a player",
+      "curl": "curl -X POST http://localhost:8080/api/match/match_abc123/join -H \"Content-Type: application/json\" -d '{\"playerName\": \"PlayerOne\"}'",
+      "pathParams": {
+        "matchId": "string (required)"
+      },
+      "requestBody": {
+        "playerName": "string (required, max 50 chars)",
+        "playerId": "string (optional)"
+      },
+      "response": {
+        "playerId": "string",
+        "playerName": "string",
+        "qrCode": "string (JSON)",
+        "qrCodeBase64": "string (Base64 image)",
+        "matchId": "string",
+        "role": "PlayerRole"
+      },
+      "statusCode": 201
+    },
+    {
+      "method": "POST",
+      "path": "/api/match/{matchId}/start",
+      "description": "Start a match (admin only)",
+      "curl": "curl -X POST http://localhost:8080/api/match/match_abc123/start -H \"Content-Type: application/json\" -d '{\"adminId\": \"player_xyz789\"}'",
+      "pathParams": {
+        "matchId": "string (required)"
+      },
+      "requestBody": {
+        "adminId": "string (required)"
+      },
+      "response": {
+        "matchId": "string",
+        "state": "MatchState",
+        "startedAt": "string (ISO 8601)"
+      },
+      "statusCode": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/match/{matchId}/pause",
+      "description": "Pause a match (admin only)",
+      "curl": "curl -X POST http://localhost:8080/api/match/match_abc123/pause -H \"Content-Type: application/json\" -d '{\"adminId\": \"player_xyz789\"}'",
+      "pathParams": {
+        "matchId": "string (required)"
+      },
+      "requestBody": {
+        "adminId": "string (required)"
+      },
+      "response": {
+        "matchId": "string",
+        "state": "MatchState",
+        "pausedAt": "string (ISO 8601)"
+      },
+      "statusCode": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/match/{matchId}/resume",
+      "description": "Resume a match (admin only)",
+      "curl": "curl -X POST http://localhost:8080/api/match/match_abc123/resume -H \"Content-Type: application/json\" -d '{\"adminId\": \"player_xyz789\"}'",
+      "pathParams": {
+        "matchId": "string (required)"
+      },
+      "requestBody": {
+        "adminId": "string (required)"
+      },
+      "response": {
+        "matchId": "string",
+        "state": "MatchState"
+      },
+      "statusCode": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/match/{matchId}/end",
+      "description": "End a match (admin only)",
+      "curl": "curl -X POST http://localhost:8080/api/match/match_abc123/end -H \"Content-Type: application/json\" -d '{\"adminId\": \"player_xyz789\"}'",
+      "pathParams": {
+        "matchId": "string (required)"
+      },
+      "requestBody": {
+        "adminId": "string (required)"
+      },
+      "response": {
+        "matchId": "string",
+        "state": "MatchState",
+        "endedAt": "string (ISO 8601)",
+        "winner": "LeaderboardEntry | null"
+      },
+      "statusCode": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/match/{matchId}/leaderboard",
+      "description": "Get match leaderboard with roles",
+      "curl": "curl -X GET http://localhost:8080/api/match/match_abc123/leaderboard",
+      "pathParams": {
+        "matchId": "string (required)"
+      },
+      "response": {
+        "matchId": "string",
+        "leaderboard": "LeaderboardEntry[]",
+        "totalPlayers": "number",
+        "adminId": "string"
+      },
+      "statusCode": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/match/{matchId}/shots",
+      "description": "Get all shot logs for a match",
+      "curl": "curl -X GET http://localhost:8080/api/match/match_abc123/shots",
+      "pathParams": {
+        "matchId": "string (required)"
+      },
+      "response": {
+        "matchId": "string",
+        "totalShots": "number",
+        "shots": "ShotLog[]"
+      },
+      "statusCode": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/match/{matchId}/player/{playerId}/stats",
+      "description": "Get shot statistics for a specific player",
+      "curl": "curl -X GET http://localhost:8080/api/match/match_abc123/player/player_def456/stats",
+      "pathParams": {
+        "matchId": "string (required)",
+        "playerId": "string (required)"
+      },
+      "response": {
+        "matchId": "string",
+        "playerId": "string",
+        "totalShots": "number",
+        "hits": "number",
+        "misses": "number",
+        "accuracy": "number"
+      },
+      "statusCode": 200
+    },
+    {
+      "method": "POST",
+      "path": "/scan-qr",
+      "description": "Scan QR code from image",
+      "curl": "curl -X POST http://localhost:8080/scan-qr -H \"Content-Type: application/json\" -d '{\"image\": \"data:image/jpeg;base64,...\"}'",
+      "requestBody": {
+        "image": "string (base64 encoded image, required)"
+      },
+      "response": {
+        "success": "boolean",
+        "qrCode": "string | null"
+      },
+      "statusCode": 200
+    },
+    {
+      "method": "POST",
+      "path": "/detect-garbage",
+      "description": "Detect garbage in image",
+      "curl": "curl -X POST http://localhost:8080/detect-garbage -H \"Content-Type: application/json\" -d '{\"image\": \"data:image/jpeg;base64,...\"}'",
+      "requestBody": {
+        "image": "string (base64 encoded image, required)"
+      },
+      "response": {
+        "success": "boolean",
+        "hasGarbage": "boolean",
+        "confidence": "number",
+        "garbageTypes": "string[]",
+        "boundingBoxes": "object[]"
+      },
+      "statusCode": 200
+    },
+    {
+      "method": "POST",
+      "path": "/scan-and-check",
+      "description": "Combined QR scan and garbage detection",
+      "curl": "curl -X POST http://localhost:8080/scan-and-check -H \"Content-Type: application/json\" -d '{\"image\": \"data:image/jpeg;base64,...\"}'",
+      "requestBody": {
+        "image": "string (base64 encoded image, required)"
+      },
+      "response": {
+        "success": "boolean",
+        "qrCode": "string | null",
+        "garbage": "object | null"
+      },
+      "statusCode": 200
+    }
+  ],
+  "types": {
+    "MatchState": {
+      "type": "string",
+      "enum": ["waiting", "active", "paused", "ended"],
+      "description": "Current state of the match"
+    },
+    "PlayerState": {
+      "type": "string",
+      "enum": ["connected", "disconnected", "eliminated"],
+      "description": "Current state of a player"
+    },
+    "PlayerRole": {
+      "type": "string",
+      "enum": ["player", "admin"],
+      "description": "Role of a player in the match"
+    },
+    "ItemType": {
+      "type": "string",
+      "enum": [
+        "plastic_bottle",
+        "can",
+        "paper",
+        "glass",
+        "organic",
+        "metal",
+        "cardboard",
+        "other"
+      ],
+      "description": "Type of inventory item"
+    },
+    "ScoreType": {
+      "type": "string",
+      "enum": ["shot_hit", "item_dropoff", "bonus", "penalty", "achievement"],
+      "description": "Type of score entry"
+    },
+    "Player": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "qrCode": { "type": "string" },
+        "qrCodeBase64": { "type": "string" },
+        "score": { "type": "number" },
+        "shots": { "type": "number" },
+        "state": { "$ref": "#/types/PlayerState" },
+        "role": { "$ref": "#/types/PlayerRole" },
+        "joinedAt": { "type": "string", "format": "date-time" },
+        "isActive": { "type": "boolean" },
+        "inventory": {
+          "type": "array",
+          "items": { "$ref": "#/types/InventoryItem" }
+        },
+        "scoreHistory": {
+          "type": "array",
+          "items": { "$ref": "#/types/ScoreEntry" }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "qrCode",
+        "qrCodeBase64",
+        "score",
+        "shots",
+        "state",
+        "role",
+        "joinedAt",
+        "isActive",
+        "inventory",
+        "scoreHistory"
+      ]
+    },
+    "PlayerDetailed": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "score": { "type": "number" },
+        "shots": { "type": "number" },
+        "state": { "$ref": "#/types/PlayerState" },
+        "role": { "$ref": "#/types/PlayerRole" },
+        "isActive": { "type": "boolean" },
+        "joinedAt": { "type": "string", "format": "date-time" },
+        "inventory": {
+          "type": "array",
+          "items": { "$ref": "#/types/InventoryItem" }
+        },
+        "scoreHistory": {
+          "type": "array",
+          "items": { "$ref": "#/types/ScoreEntry" }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "score",
+        "shots",
+        "state",
+        "role",
+        "isActive",
+        "joinedAt",
+        "inventory",
+        "scoreHistory"
+      ]
+    },
+    "InventoryItem": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "$ref": "#/types/ItemType" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "value": { "type": "number", "description": "Points when dropped off" },
+        "potentialScore": {
+          "type": "number",
+          "description": "Maximum possible score from this item"
+        },
+        "pickedUpAt": { "type": "string", "format": "date-time" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          }
+        },
+        "metadata": { "type": "object", "additionalProperties": true }
+      },
+      "required": [
+        "id",
+        "type",
+        "name",
+        "description",
+        "value",
+        "potentialScore",
+        "pickedUpAt"
+      ]
+    },
+    "ScoreEntry": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "$ref": "#/types/ScoreType" },
+        "points": { "type": "number" },
+        "description": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "metadata": { "type": "object", "additionalProperties": true }
+      },
+      "required": ["id", "type", "points", "description", "timestamp"]
+    },
+    "LeaderboardEntry": {
+      "type": "object",
+      "properties": {
+        "playerId": { "type": "string" },
+        "playerName": { "type": "string" },
+        "score": { "type": "number" },
+        "shots": { "type": "number" },
+        "rank": { "type": "number" },
+        "hits": { "type": "number" },
+        "role": { "$ref": "#/types/PlayerRole" }
+      },
+      "required": [
+        "playerId",
+        "playerName",
+        "score",
+        "shots",
+        "rank",
+        "hits",
+        "role"
+      ]
+    },
+    "ShotLog": {
+      "type": "object",
+      "properties": {
+        "shotId": { "type": "string" },
+        "shooterId": { "type": "string" },
+        "targetId": { "type": "string", "nullable": true },
+        "hit": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["shotId", "shooterId", "targetId", "hit", "timestamp"]
+    },
+    "Match": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "state": { "$ref": "#/types/MatchState" },
+        "players": { "type": "array", "items": { "$ref": "#/types/Player" } },
+        "adminId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "endedAt": { "type": "string", "format": "date-time", "nullable": true }
+      },
+      "required": ["id", "state", "players", "adminId", "createdAt"]
+    }
+  },
+  "websocket": {
+    "url": "ws://localhost:8080/ws",
+    "clientEvents": [
+      {
+        "type": "player:connect",
+        "data": {
+          "matchId": "string",
+          "playerId": "string"
+        }
+      },
+      {
+        "type": "player:disconnect",
+        "data": {
+          "matchId": "string",
+          "playerId": "string"
+        }
+      },
+      {
+        "type": "shot:attempt",
+        "data": {
+          "matchId": "string",
+          "shooterId": "string",
+          "imageData": "string (base64)"
+        }
+      },
+      {
+        "type": "admin:action",
+        "data": {
+          "matchId": "string",
+          "adminId": "string",
+          "action": "start | pause | resume | end"
+        }
+      },
+      {
+        "type": "item:pickup",
+        "data": {
+          "matchId": "string",
+          "playerId": "string",
+          "item": "InventoryItem",
+          "timestamp": "string"
+        }
+      },
+      {
+        "type": "item:dropoff",
+        "data": {
+          "matchId": "string",
+          "playerId": "string",
+          "item": "InventoryItem",
+          "pointsEarned": "number",
+          "timestamp": "string"
+        }
+      }
+    ],
+    "serverEvents": [
+      {
+        "type": "match:state",
+        "data": {
+          "matchId": "string",
+          "state": "MatchState",
+          "players": "Player[]"
+        }
+      },
+      {
+        "type": "player:joined",
+        "data": {
+          "matchId": "string",
+          "player": {
+            "id": "string",
+            "name": "string",
+            "qrCode": "string"
+          }
+        }
+      },
+      {
+        "type": "player:left",
+        "data": {
+          "matchId": "string",
+          "playerId": "string"
+        }
+      },
+      {
+        "type": "leaderboard:update",
+        "data": {
+          "matchId": "string",
+          "leaderboard": "LeaderboardEntry[]"
+        }
+      },
+      {
+        "type": "shot:result",
+        "data": {
+          "matchId": "string",
+          "shotId": "string",
+          "shooterId": "string",
+          "targetId": "string",
+          "hit": "boolean",
+          "timestamp": "string"
+        }
+      },
+      {
+        "type": "match:started",
+        "data": {
+          "matchId": "string",
+          "startedAt": "string"
+        }
+      },
+      {
+        "type": "match:paused",
+        "data": {
+          "matchId": "string",
+          "pausedAt": "string",
+          "adminId": "string"
+        }
+      },
+      {
+        "type": "match:resumed",
+        "data": {
+          "matchId": "string",
+          "resumedAt": "string",
+          "adminId": "string"
+        }
+      },
+      {
+        "type": "match:ended",
+        "data": {
+          "matchId": "string",
+          "endedAt": "string",
+          "winner": "LeaderboardEntry | null"
+        }
+      },
+      {
+        "type": "item:picked_up",
+        "data": {
+          "matchId": "string",
+          "playerId": "string",
+          "item": "InventoryItem",
+          "timestamp": "string"
+        }
+      },
+      {
+        "type": "item:dropped_off",
+        "data": {
+          "matchId": "string",
+          "playerId": "string",
+          "item": "InventoryItem",
+          "pointsEarned": "number",
+          "timestamp": "string"
+        }
+      },
+      {
+        "type": "score:update",
+        "data": {
+          "matchId": "string",
+          "playerId": "string",
+          "scoreEntry": "ScoreEntry",
+          "newTotalScore": "number",
+          "timestamp": "string"
+        }
+      }
+    ]
+  },
+  "errorResponses": {
+    "400": {
+      "error": "Bad Request",
+      "details": "Invalid request parameters"
+    },
+    "404": {
+      "error": "Not Found",
+      "details": "Resource not found"
+    },
+    "409": {
+      "error": "Conflict",
+      "details": "Resource already exists (e.g., duplicate player name)"
+    },
+    "500": {
+      "error": "Internal Server Error",
+      "details": "An unexpected error occurred"
+    }
+  },
+  "quickStart": {
+    "workflow": [
+      "1. Create Match: POST /api/match/create",
+      "2. Join Players: POST /api/match/{id}/join",
+      "3. Start Match: POST /api/match/{id}/start",
+      "4. Monitor Progress: GET /api/match/{id}/leaderboard",
+      "5. End Match: POST /api/match/{id}/end"
+    ],
+    "example": {
+      "createMatch": {
+        "curl": "curl -X POST http://localhost:8080/api/match/create -H \"Content-Type: application/json\" -d '{\"adminName\": \"GameMaster\"}'",
+        "response": {
+          "matchId": "match_abc123",
+          "adminId": "player_xyz789",
+          "adminName": "GameMaster",
+          "createdAt": "2024-01-15T10:30:00.000Z"
+        }
+      },
+      "joinPlayer": {
+        "curl": "curl -X POST http://localhost:8080/api/match/match_abc123/join -H \"Content-Type: application/json\" -d '{\"playerName\": \"PlayerOne\"}'",
+        "response": {
+          "playerId": "player_def456",
+          "playerName": "PlayerOne",
+          "qrCode": "{\"matchId\":\"match_abc123\",\"playerId\":\"player_def456\",\"timestamp\":\"2024-01-15T10:35:00.000Z\"}",
+          "qrCodeBase64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+          "matchId": "match_abc123",
+          "role": "player"
+        }
+      }
+    }
+  }
+}

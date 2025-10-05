@@ -408,6 +408,7 @@ class MatchManager {
         shots: player.shots,
         rank: 0,
         hits: 0,
+        role: player.role,
       }))
       .sort((a, b) => b.score - a.score);
 

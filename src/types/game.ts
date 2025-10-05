@@ -78,6 +78,7 @@ export interface LeaderboardEntry {
   shots: number;
   rank: number;
   hits: number;
+  role: PlayerRole;
 }
 
 // Shot data structure for database storage
