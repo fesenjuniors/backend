@@ -13,6 +13,7 @@ import type {
   MatchStatePayload,
   LeaderboardUpdatePayload,
   ShotAttemptPayload,
+  MatchAdminAction,
 } from "../types/game";
 import { scanQRFromBase64 } from "../utils/qr-base64-scanner";
 
@@ -76,9 +77,11 @@ export const setupGameWebSocketHandlers = (
           break;
 
         case "admin:action":
-          // TODO: Implement admin action handler
-          console.log("Admin action received:", message.data);
-          sendError(ws, "Admin actions not yet implemented");
+          // Handle admin actions (start, pause, resume, end match)
+          handleAdminAction(message.data, ws, wsManager).catch((error) => {
+            console.error("Error in admin action handler:", error);
+            sendError(ws, "Admin action failed");
+          });
           break;
 
         default:
@@ -265,6 +268,120 @@ async function handleShotAttempt(
     );
   }
 }
+
+/**
+ * Handle admin action (start, pause, resume, end match)
+ */
+async function handleAdminAction(
+  payload: MatchAdminAction,
+  ws: WebSocket,
+  wsManager: WebSocketManager
+): Promise<void> {
+  const { matchId, adminId, action } = payload;
+
+  console.log(`Admin action: ${action} for match ${matchId} by admin ${adminId}`);
+
+  // Verify match exists
+  const match = matchManager.getMatch(matchId);
+  if (!match) {
+    sendError(ws, "Match not found");
+    return;
+  }
+
+  // Verify admin permissions
+  if (match.adminId !== adminId) {
+    sendError(ws, "Unauthorized: Only match admin can perform this action");
+    return;
+  }
+
+  let success = false;
+  let broadcastEvent: string | null = null;
+  let broadcastData: any = null;
+
+  switch (action) {
+    case "start":
+      success = matchManager.startMatch(matchId, adminId);
+      if (success) {
+        broadcastEvent = "match:started";
+        broadcastData = {
+          matchId,
+          startedAt: match.startedAt!.toISOString(),
+        };
+      }
+      break;
+
+    case "pause":
+      success = matchManager.pauseMatch(matchId, adminId);
+      if (success) {
+        broadcastEvent = "match:paused";
+        broadcastData = {
+          matchId,
+          pausedAt: match.pausedAt!.toISOString(),
+          adminId,
+        };
+      }
+      break;
+
+    case "resume":
+      success = matchManager.resumeMatch(matchId, adminId);
+      if (success) {
+        broadcastEvent = "match:resumed";
+        broadcastData = {
+          matchId,
+          resumedAt: new Date().toISOString(),
+          adminId,
+        };
+      }
+      break;
+
+    case "end":
+      success = matchManager.endMatch(matchId, adminId);
+      if (success) {
+        const winner = matchManager.getWinner(matchId);
+        broadcastEvent = "match:ended";
+        broadcastData = {
+          matchId,
+          endedAt: match.endedAt!.toISOString(),
+          winner: winner || null,
+        };
+      }
+      break;
+
+    default:
+      sendError(ws, `Unknown admin action: ${action}`);
+      return;
+  }
+
+  if (!success) {
+    sendError(ws, `Failed to ${action} match. Check match state and permissions.`);
+    return;
+  }
+
+  // Broadcast the event to all clients
+  if (broadcastEvent && broadcastData) {
+    wsManager.broadcast(
+      JSON.stringify({
+        type: broadcastEvent,
+        data: broadcastData,
+      })
+    );
+  }
+
+  // Send success response to admin
+  ws.send(
+    JSON.stringify({
+      type: "admin:action:success",
+      data: {
+        matchId,
+        action,
+        timestamp: new Date().toISOString(),
+      },
+    })
+  );
+
+  console.log(`Admin action ${action} completed for match ${matchId}`);
+}
+
 
 /**
  * Broadcast leaderboard update to all clients
