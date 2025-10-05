@@ -22,10 +22,24 @@ export class MatchRepository {
       const db = getDb();
       const matchData = {
         id: match.id,
+        adminId: match.adminId,
         state: match.state,
         createdAt: match.createdAt,
         startedAt: match.startedAt || null,
         endedAt: match.endedAt || null,
+        pausedAt: match.pausedAt || null,
+        players: Array.from(match.players.values()).map((player) => ({
+          id: player.id,
+          name: player.name,
+          role: player.role,
+          qrCode: player.qrCode,
+          qrCodeBase64: player.qrCodeBase64,
+          score: player.score,
+          shots: player.shots,
+          state: player.state,
+          joinedAt: player.joinedAt,
+          isActive: player.isActive,
+        })),
       };
 
       await db.collection(this.COLLECTION).doc(match.id).set(matchData);
@@ -57,6 +71,8 @@ export class MatchRepository {
         updateData.startedAt = timestamp;
       } else if (state === "ended" && timestamp) {
         updateData.endedAt = timestamp;
+      } else if (state === "paused" && timestamp) {
+        updateData.pausedAt = timestamp;
       }
 
       await db.collection(this.COLLECTION).doc(matchId).update(updateData);
@@ -81,11 +97,14 @@ export class MatchRepository {
       const playerData = {
         id: player.id,
         name: player.name,
+        role: player.role,
         qrCode: player.qrCode,
+        qrCodeBase64: player.qrCodeBase64,
         score: player.score,
         shots: player.shots,
         state: player.state,
         joinedAt: player.joinedAt,
+        isActive: player.isActive,
       };
 
       await db
