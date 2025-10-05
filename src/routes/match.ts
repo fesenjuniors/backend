@@ -237,7 +237,7 @@ router.post(
   "/api/match/:matchId/join",
   asyncHandler(async (req: Request, res: Response) => {
     const matchId = req.params.matchId as string;
-    const { playerName } = req.body;
+    const { playerName, playerId } = req.body;
 
     // Validate matchId
     if (!matchId || typeof matchId !== "string") {
@@ -269,7 +269,7 @@ router.post(
       });
     }
 
-    const player = await matchManager.addPlayer(matchId, playerName.trim());
+    const player = await matchManager.addPlayer(matchId, playerName.trim(), playerId);
     if (!player) {
       // Check if it's a duplicate name error
       const match = matchManager.getMatch(matchId);

@@ -108,7 +108,7 @@ class MatchManager {
   /**
    * Add a player to a match
    */
-  async addPlayer(matchId: string, playerName: string): Promise<Player | null> {
+  async addPlayer(matchId: string, playerName: string, customPlayerId?: string): Promise<Player | null> {
     try {
       // Validate inputs
       if (!matchId || typeof matchId !== "string") {
@@ -144,7 +144,7 @@ class MatchManager {
         return null;
       }
 
-      const playerId = this.generatePlayerId();
+      const playerId = customPlayerId || this.generatePlayerId();
 
       // Generate QR code for player
       let qrData;
