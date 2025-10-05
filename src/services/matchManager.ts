@@ -79,9 +79,14 @@ class MatchManager {
 
       console.log(`Match created: ${matchId} with admin: ${adminName}`);
 
-      // Save to Firebase (async, non-blocking)
+      // Save match and admin player to Firebase (async, non-blocking)
       matchRepository.saveMatch(match).catch((err) => {
         console.error("Failed to save match to Firebase:", err);
+      });
+
+      // Save admin player to Firebase (async, non-blocking)
+      matchRepository.savePlayer(matchId, adminPlayer).catch((err) => {
+        console.error("Failed to save admin player to Firebase:", err);
       });
 
       return match;
@@ -108,7 +113,11 @@ class MatchManager {
   /**
    * Add a player to a match
    */
-  async addPlayer(matchId: string, playerName: string, customPlayerId?: string): Promise<Player | null> {
+  async addPlayer(
+    matchId: string,
+    playerName: string,
+    customPlayerId?: string
+  ): Promise<Player | null> {
     try {
       // Validate inputs
       if (!matchId || typeof matchId !== "string") {
