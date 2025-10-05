@@ -8,6 +8,8 @@
     "dev": "nodemon --watch src --ext ts --exec ts-node src/server/server.ts",
     "dev:https": "HTTPS_ENABLED=true nodemon --watch src --ext ts --exec ts-node src/server/server.ts",
     "start": "node dist/server/server.js",
+    "test:websocket": "node test-websocket.js",
+    "test:inventory": "ts-node tests/test-inventory-score.ts"
     "start:https": "HTTPS_ENABLED=true node dist/server/server.js",
     "test:websocket": "node test-websocket.js",
     "generate-certs": "ts-node -e \"require('./src/utils/certificateGenerator').generateSelfSignedCertificate()\""

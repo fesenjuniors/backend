@@ -171,7 +171,7 @@ async function testShotHandling() {
           const playerData2 = JSON.parse(data);
           console.log("Player 2 joined:", playerData2);
 
-          // Now start the match
+          // Now start the match via WebSocket (which will also handle the shot attempt)
           startMatch(
             matchId,
             adminId,
@@ -203,107 +203,56 @@ async function testShotHandling() {
     onSuccess,
     onError
   ) {
-    console.log("Starting the match...");
+    console.log("Starting the match via WebSocket...");
 
-    const startRequest = http.request(`${httpUrl}/api/match/${matchId}/start`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-
-    startRequest.write(JSON.stringify({ adminId }));
-
-    startRequest.on("response", (res) => {
-      let data = "";
-      res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => {
-        try {
-          const startData = JSON.parse(data);
-          console.log("Match started:", startData);
-
-          // Now connect via websocket
-          connectAndTest(
-            matchId,
-            adminId,
-            imageFile,
-            shouldHit,
-            onSuccess,
-            onError
-          );
-        } catch (error) {
-          console.error("Error parsing match start response:", error);
-          onError(error);
-        }
-      });
-    });
-
-    startRequest.on("error", (error) => {
-      console.error("Error starting match:", error);
-      onError(error);
-    });
-
-    startRequest.end();
-  }
-
-  function connectAndTest(
-    matchId,
-    playerId,
-    imageFile,
-    shouldHit,
-    onSuccess,
-    onError
-  ) {
-    console.log("Connecting to websocket server...");
-
+    // Create a persistent WebSocket connection like a frontend client would
     const ws = new WebSocket(serverUrl);
+    let connected = false;
+    let matchStarted = false;
 
     ws.on("open", () => {
-      console.log("Connected to websocket server");
+      console.log("Frontend client connected to websocket server");
+      connected = true;
 
-      // Connect a player to the match
+      // Connect admin to the match first
       const connectMessage = {
         type: "player:connect",
         data: {
           matchId: matchId,
-          playerId: playerId,
+          playerId: adminId,
         },
       };
 
-      console.log("Sending player connect message:", connectMessage);
       ws.send(JSON.stringify(connectMessage));
     });
 
     ws.on("message", (data) => {
       const message = JSON.parse(data.toString());
-      console.log("Received message:", message);
+      console.log("Frontend received message:", message);
 
-      // After connecting, send a shot attempt
-      if (message.type === "match:state") {
-        console.log("Player connected successfully, sending shot attempt...");
+      // After connecting, send admin action to start match
+      if (message.type === "match:state" && !matchStarted) {
+        console.log("Admin connected, sending start match command...");
 
-        // Read the image file and convert to base64
-        try {
-          const imageBuffer = fs.readFileSync(imageFile);
-          const base64Image = imageBuffer.toString("base64");
+        const startMessage = {
+          type: "admin:action",
+          data: {
+            matchId: matchId,
+            adminId: adminId,
+            action: "start",
+          },
+        };
 
-          console.log(`Loaded ${imageFile}, size: ${base64Image.length} bytes`);
+        ws.send(JSON.stringify(startMessage));
+      }
 
-          const shotMessage = {
-            type: "shot:attempt",
-            data: {
-              matchId: matchId,
-              shooterId: playerId,
-              imageData: base64Image,
-            },
-          };
+      // Listen for match started event
+      if (message.type === "match:started") {
+        console.log("Match started successfully");
+        matchStarted = true;
 
-          console.log("Sending shot attempt message");
-          ws.send(JSON.stringify(shotMessage));
-        } catch (error) {
-          console.error("Error reading image file:", error);
-          reject(error);
-        }
+        // Now send shot attempt like a frontend client would
+        sendShotAttempt(ws, matchId, adminId, imageFile, shouldHit, onSuccess, onError);
       }
 
       // Listen for shot result broadcast
@@ -314,8 +263,18 @@ async function testShotHandling() {
           console.log(
             `✅ ${shouldHit ? "Hit" : "Miss"} scenario tested successfully!`
           );
-          ws.close();
-          onSuccess({ passed: true });
+
+          // Now end the match
+          console.log("Ending the match...");
+          const endMessage = {
+            type: "admin:action",
+            data: {
+              matchId: matchId,
+              adminId: adminId,
+              action: "end",
+            },
+          };
+          ws.send(JSON.stringify(endMessage));
         } else {
           console.log(
             `⚠️  Expected ${shouldHit ? "hit" : "miss"} but got ${
@@ -325,6 +284,18 @@ async function testShotHandling() {
           ws.close();
           onError(new Error(`Expected ${shouldHit ? "hit" : "miss"} but got ${actualHit ? "hit" : "miss"}`));
         }
+      }
+
+      // Listen for match ended event
+      if (message.type === "match:ended") {
+        console.log("Match ended successfully:", message.data);
+        ws.close();
+        onSuccess({ passed: true });
+      }
+
+      // Handle admin action success
+      if (message.type === "admin:action:success") {
+        console.log("Admin action completed:", message.data);
       }
 
       // Handle errors
@@ -341,15 +312,42 @@ async function testShotHandling() {
     });
 
     ws.on("close", () => {
-      console.log("WebSocket connection closed");
+      console.log("Frontend WebSocket connection closed");
     });
 
-    // Timeout after 15 seconds (QR scanning might take longer)
+    // Timeout
     setTimeout(() => {
       console.log("❌ Test timed out");
       ws.close();
       onError(new Error("Test timed out"));
-    }, 15000);
+    }, 20000);
+  }
+
+  function sendShotAttempt(ws, matchId, playerId, imageFile, shouldHit, onSuccess, onError) {
+    console.log("Sending shot attempt...");
+
+    // Read the image file and convert to base64
+    try {
+      const imageBuffer = fs.readFileSync(imageFile);
+      const base64Image = imageBuffer.toString("base64");
+
+      console.log(`Loaded ${imageFile}, size: ${base64Image.length} bytes`);
+
+      const shotMessage = {
+        type: "shot:attempt",
+        data: {
+          matchId: matchId,
+          shooterId: playerId,
+          imageData: base64Image,
+        },
+      };
+
+      console.log("Sending shot attempt message");
+      ws.send(JSON.stringify(shotMessage));
+    } catch (error) {
+      console.error("Error reading image file:", error);
+      onError(error);
+    }
   }
 }
 

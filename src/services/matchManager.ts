@@ -55,6 +55,8 @@ class MatchManager {
         state: "connected",
         role: "admin",
         joinedAt: new Date(),
+        inventory: [],
+        scoreHistory: [],
       };
 
       // Generate QR code for admin (async, non-blocking)
@@ -183,6 +185,8 @@ class MatchManager {
         state: "connected",
         role: "player",
         joinedAt: new Date(),
+        inventory: [],
+        scoreHistory: [],
       };
 
       match.players.set(playerId, player);
